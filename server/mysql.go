@@ -5,7 +5,7 @@ import (
 	"github.com/Devying/db-agent/config"
 	"errors"
 	//"fmt"
-	//"github.com/Devying/db-agent/third_party/mysql"
+	"github.com/Devying/db-agent/third_party/mysql"
 	"io"
 	"net"
 )
@@ -13,19 +13,19 @@ import (
 type Mysql struct {
 	Conf map[string]config.DBConf
 	Port int
-	//Conn *mysql.MysqlConn
+	Conn *mysql.MysqlConn
 }
 func (m *Mysql)GetPort()int{
 	return m.Port
 }
 func (m *Mysql)Initialize(){
-	//md:= mysql.MySQLDriver{}
-	//var err error
-	//m.Conn,err = md.Open("ug_task:1q2w3e123@tcp(10.77.39.89:3306)/task_user_0")
-	//defer m.Conn.Close()
-	//if err != nil {
-	//	panic(err)
-	//}
+	md:= mysql.MySQLDriver{}
+	var err error
+	m.Conn,err = md.Open("ug_task:1q2w3e123@tcp(10.77.39.89:3306)/task_user_0")
+	defer m.Conn.Close()
+	if err != nil {
+		panic(err)
+	}
 
 	//mysql 认证
 	println("init====")
