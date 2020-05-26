@@ -1,0 +1,18 @@
+redis:
+  user:
+    host: "10.77.39.89"
+    port: 6379
+  info:
+    host: "10.77.39.89"
+    port: 6378
+mysql:
+  center:
+    host: "10.77.39.89"
+    port: 3306
+    user: "root"
+    pass: "root"
+  task:
+    host: "10.77.39.89"
+    port: 3307
+    user: "root"
+    pass: "root"
