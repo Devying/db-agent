@@ -9,10 +9,16 @@ mysql:
   center:
     host: "10.77.39.89"
     port: 3306
-    user: "root"
-    pass: "root"
+    user: "ug_task"
+    pass: "1q2w3e123"
+    db: "task_center"
+    max_open_conn: 1000
+    max_idle_conn: 500
   task:
     host: "10.77.39.89"
-    port: 3307
-    user: "root"
-    pass: "root"
+    port: 3306
+    user: "ug_task"
+    pass: "1q2w3e123"
+    db: "task_user_0"
+    max_open_conn: 1000
+    max_idle_conn: 500

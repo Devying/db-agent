@@ -5,23 +5,31 @@ import (
 	"net"
 	"strconv"
 )
-var Db DB
+var Conf *config.Config
 func Init()  {
-	config.ParseConf()
-	Db = GetDB()
-	Db.Initialize()
+	Conf = config.ParseConf()
 }
 func Start() {
-	l,err := net.Listen("tcp",":"+strconv.Itoa(Db.GetPort()))
+	var err error
+	l,err := net.Listen("tcp",":"+strconv.Itoa(Conf.Port))
 	if err != nil {
 		panic(err)
 	}
-	println("listing",Db.GetPort())
+	db := NewDB()
+	err = db.Config()
+	if err != nil {
+		panic(err)
+	}
+	err = db.Initialize()
+	if err != nil {
+		panic(err)
+	}
+	println("listing",Conf.Port)
 	for{
 		conn,err := l.Accept()
 		if err != nil {
 			panic(err)
 		}
-		go Db.Process(conn)
+		go db.Process(conn)
 	}
 }

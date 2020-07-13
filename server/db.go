@@ -1,27 +1,21 @@
 package server
 
 import (
-	"github.com/Devying/db-agent/config"
 	"net"
 )
 
 type DB interface {
-	Initialize()
+	Config() error
+	Initialize() error
 	Process(conn net.Conn)
-	GetPort()int
 }
-func GetDB() DB {
-	switch config.Conf.Server.DB {
+
+func NewDB() DB {
+	switch Conf.DB{
 	case "redis":
-		return &Redis{
-			Conf:config.Conf.Databases,
-			Port:config.Conf.Server.Port,
-		}
+		return &Redis{}
 	case "mysql":
-		return &Mysql{
-			Conf:config.Conf.Databases,
-			Port:config.Conf.Server.Port,
-		}
+		return &Mysql{}
 	}
 	return &Redis{}
 }

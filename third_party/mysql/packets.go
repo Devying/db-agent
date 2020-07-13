@@ -24,70 +24,7 @@ import (
 // http://dev.mysql.com/doc/internals/en/client-server-protocol.html
 
 // Read packet to buffer 'data'
-func (mc *MysqlConn) readPacket() ([]byte, error) {
-	var prevData []byte
-	for {
-		// read packet header
-		data, err := mc.buf.readNext(4)
-		if err != nil {
-			if cerr := mc.canceled.Value(); cerr != nil {
-				return nil, cerr
-			}
-			errLog.Print(err)
-			mc.Close()
-			return nil, ErrInvalidConn
-		}
-
-		// packet length [24 bit]
-		pktLen := int(uint32(data[0]) | uint32(data[1])<<8 | uint32(data[2])<<16)
-
-		// check packet sync [8 bit]
-		if data[3] != mc.sequence {
-			if data[3] > mc.sequence {
-				return nil, ErrPktSyncMul
-			}
-			return nil, ErrPktSync
-		}
-		mc.sequence++
-
-		// packets with length 0 terminate a previous packet which is a
-		// multiple of (2^24)-1 bytes long
-		if pktLen == 0 {
-			// there was no previous packet
-			if prevData == nil {
-				errLog.Print(ErrMalformPkt)
-				mc.Close()
-				return nil, ErrInvalidConn
-			}
-
-			return prevData, nil
-		}
-
-		// read packet body [pktLen bytes]
-		data, err = mc.buf.readNext(pktLen)
-		if err != nil {
-			if cerr := mc.canceled.Value(); cerr != nil {
-				return nil, cerr
-			}
-			errLog.Print(err)
-			mc.Close()
-			return nil, ErrInvalidConn
-		}
-
-		// return data if this was the last packet
-		if pktLen < maxPacketSize {
-			// zero allocations for non-split packets
-			if prevData == nil {
-				return data, nil
-			}
-
-			return append(prevData, data...), nil
-		}
-
-		prevData = append(prevData, data...)
-	}
-}
-func (mc *MysqlConn) ReadPacketRaw() ([]byte, error) {
+func (mc *mysqlConn) readPacket() ([]byte, error) {
 	var prevData []byte
 	for {
 		// read packet header
@@ -151,7 +88,7 @@ func (mc *MysqlConn) ReadPacketRaw() ([]byte, error) {
 	}
 }
 // Write packet buffer 'data'
-func (mc *MysqlConn) writePacket(data []byte) error {
+func (mc *mysqlConn) writePacket(data []byte) error {
 	pktLen := len(data) - 4
 
 	if pktLen > mc.maxAllowedPacket {
@@ -208,7 +145,6 @@ func (mc *MysqlConn) writePacket(data []byte) error {
 				return err
 			}
 		}
-
 		n, err := mc.netConn.Write(data[:4+size])
 		if err == nil && n == 4+size {
 			mc.sequence++
@@ -239,13 +175,160 @@ func (mc *MysqlConn) writePacket(data []byte) error {
 	}
 }
 
+func (mc *mysqlConn) WriteRawPacket(data []byte) error {
+	mc.sequence = 0
+	pktLen := len(data) - 4
+
+	if pktLen > mc.maxAllowedPacket {
+		return ErrPktTooLarge
+	}
+
+	// Perform a stale connection check. We only perform this check for
+	// the first query on a connection that has been checked out of the
+	// connection pool: a fresh connection from the pool is more likely
+	// to be stale, and it has not performed any previous writes that
+	// could cause data corruption, so it's safe to return ErrBadConn
+	// if the check fails.
+	if mc.reset {
+		mc.reset = false
+		conn := mc.netConn
+		if mc.rawConn != nil {
+			conn = mc.rawConn
+		}
+		var err error
+		// If this connection has a ReadTimeout which we've been setting on
+		// reads, reset it to its default value before we attempt a non-blocking
+		// read, otherwise the scheduler will just time us out before we can read
+		if mc.cfg.ReadTimeout != 0 {
+			err = conn.SetReadDeadline(time.Time{})
+		}
+		if err == nil && mc.cfg.CheckConnLiveness {
+			err = connCheck(conn)
+		}
+		if err != nil {
+			errLog.Print("closing bad idle connection: ", err)
+			mc.Close()
+			return driver.ErrBadConn
+		}
+	}
+
+	for {
+		var size int
+		if pktLen >= maxPacketSize {
+			data[0] = 0xff
+			data[1] = 0xff
+			data[2] = 0xff
+			size = maxPacketSize
+		} else {
+			data[0] = byte(pktLen)
+			data[1] = byte(pktLen >> 8)
+			data[2] = byte(pktLen >> 16)
+			size = pktLen
+		}
+		data[3] = mc.sequence
+		// Write packet
+		if mc.writeTimeout > 0 {
+			if err := mc.netConn.SetWriteDeadline(time.Now().Add(mc.writeTimeout)); err != nil {
+				return err
+			}
+		}
+
+		n, err := mc.netConn.Write(data[:4+size])
+		if err == nil && n == 4+size {
+			mc.sequence++
+			if size != maxPacketSize {
+				return nil
+			}
+			pktLen -= size
+			data = data[size:]
+			continue
+		}
+		// Handle error
+		if err == nil { // n != len(data)
+			mc.cleanup()
+			errLog.Print(ErrMalformPkt)
+		} else {
+			if cerr := mc.canceled.Value(); cerr != nil {
+				return cerr
+			}
+			if n == 0 && pktLen == len(data)-4 {
+				// only for the first loop iteration when nothing was written yet
+				return errBadConnNoWrite
+			}
+			mc.cleanup()
+			errLog.Print(err)
+		}
+		return ErrInvalidConn
+	}
+}
+func (mc *mysqlConn) ReadRawPacket() ([]byte, error) {
+	var prevData []byte
+	for {
+		// read packet header
+		header, err := mc.buf.readNext(4)
+		if err != nil {
+			if cerr := mc.canceled.Value(); cerr != nil {
+				return nil, cerr
+			}
+			errLog.Print(err)
+			mc.Close()
+			return nil, ErrInvalidConn
+		}
+		// packet length [24 bit]
+		pktLen := int(uint32(header[0]) | uint32(header[1])<<8 | uint32(header[2])<<16)
+
+		// check packet sync [8 bit]
+		if header[3] != mc.sequence {
+			if header[3] > mc.sequence {
+				return nil, ErrPktSyncMul
+			}
+			return nil, ErrPktSync
+		}
+		mc.sequence++
+
+		// packets with length 0 terminate a previous packet which is a
+		// multiple of (2^24)-1 bytes long
+		prevData := append(prevData,header...)
+		if pktLen == 0 {
+			// there was no previous packet
+			if prevData == nil {
+				errLog.Print(ErrMalformPkt)
+				mc.Close()
+				return nil, ErrInvalidConn
+			}
+			return prevData, nil
+		}
+
+		// read packet body [pktLen bytes]
+		data, err := mc.buf.readNext(pktLen)
+		if err != nil {
+			if cerr := mc.canceled.Value(); cerr != nil {
+				return nil, cerr
+			}
+			errLog.Print(err)
+			mc.Close()
+			return nil, ErrInvalidConn
+		}
+		// return data if this was the last packet
+		if pktLen < maxPacketSize {
+			// zero allocations for non-split packets
+			if prevData == nil {
+				return data, nil
+			}
+
+			return append(prevData, data...), nil
+		}
+
+		prevData = append(prevData, data...)
+	}
+}
 /******************************************************************************
 *                           Initialization Process                            *
 ******************************************************************************/
 
 // Handshake Initialization Packet
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
-func (mc *MysqlConn) readHandshakePacket() (data []byte, plugin string, err error) {
+func (mc *mysqlConn) readHandshakePacket() (data []byte, plugin string, err error) {
 	data, err = mc.readPacket()
 	if err != nil {
 		// for init we can rewrite this to ErrBadConn for sql.Driver to retry, since
@@ -338,7 +421,7 @@ func (mc *MysqlConn) readHandshakePacket() (data []byte, plugin string, err erro
 
 // Client Authentication Packet
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::HandshakeResponse
-func (mc *MysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string) error {
+func (mc *mysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string) error {
 	// Adjust client flags based on server support
 	clientFlags := clientProtocol41 |
 		clientSecureConn |
@@ -457,11 +540,12 @@ func (mc *MysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string
 	pos++
 
 	// Send Auth packet
+	fmt.Println("auth :data:",string(data[:pos]))
 	return mc.writePacket(data[:pos])
 }
 
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::AuthSwitchResponse
-func (mc *MysqlConn) writeAuthSwitchPacket(authData []byte) error {
+func (mc *mysqlConn) writeAuthSwitchPacket(authData []byte) error {
 	pktLen := 4 + len(authData)
 	data, err := mc.buf.takeSmallBuffer(pktLen)
 	if err != nil {
@@ -479,7 +563,7 @@ func (mc *MysqlConn) writeAuthSwitchPacket(authData []byte) error {
 *                             Command Packets                                 *
 ******************************************************************************/
 
-func (mc *MysqlConn) writeCommandPacket(command byte) error {
+func (mc *mysqlConn) writeCommandPacket(command byte) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
 
@@ -497,7 +581,7 @@ func (mc *MysqlConn) writeCommandPacket(command byte) error {
 	return mc.writePacket(data)
 }
 
-func (mc *MysqlConn) writeCommandPacketStr(command byte, arg string) error {
+func (mc *mysqlConn) writeCommandPacketStr(command byte, arg string) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
 
@@ -519,7 +603,7 @@ func (mc *MysqlConn) writeCommandPacketStr(command byte, arg string) error {
 	return mc.writePacket(data)
 }
 
-func (mc *MysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
+func (mc *mysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
 
@@ -547,7 +631,7 @@ func (mc *MysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
 *                              Result Packets                                 *
 ******************************************************************************/
 
-func (mc *MysqlConn) readAuthResult() ([]byte, string, error) {
+func (mc *mysqlConn) readAuthResult() ([]byte, string, error) {
 	data, err := mc.readPacket()
 	if err != nil {
 		return nil, "", err
@@ -581,7 +665,7 @@ func (mc *MysqlConn) readAuthResult() ([]byte, string, error) {
 }
 
 // Returns error if Packet is not an 'Result OK'-Packet
-func (mc *MysqlConn) readResultOK() error {
+func (mc *mysqlConn) readResultOK() error {
 	data, err := mc.readPacket()
 	if err != nil {
 		return err
@@ -595,7 +679,7 @@ func (mc *MysqlConn) readResultOK() error {
 
 // Result Set Header Packet
 // http://dev.mysql.com/doc/internals/en/com-query-response.html#packet-ProtocolText::Resultset
-func (mc *MysqlConn) readResultSetHeaderPacket() (int, error) {
+func (mc *mysqlConn) readResultSetHeaderPacket() (int, error) {
 	data, err := mc.readPacket()
 	if err == nil {
 		switch data[0] {
@@ -623,7 +707,7 @@ func (mc *MysqlConn) readResultSetHeaderPacket() (int, error) {
 
 // Error Packet
 // http://dev.mysql.com/doc/internals/en/generic-response-packets.html#packet-ERR_Packet
-func (mc *MysqlConn) handleErrorPacket(data []byte) error {
+func (mc *mysqlConn) handleErrorPacket(data []byte) error {
 	if data[0] != iERR {
 		return ErrMalformPkt
 	}
@@ -670,7 +754,7 @@ func readStatus(b []byte) statusFlag {
 
 // Ok Packet
 // http://dev.mysql.com/doc/internals/en/generic-response-packets.html#packet-OK_Packet
-func (mc *MysqlConn) handleOkPacket(data []byte) error {
+func (mc *mysqlConn) handleOkPacket(data []byte) error {
 	var n, m int
 
 	// 0x00 [1 byte]
@@ -694,7 +778,7 @@ func (mc *MysqlConn) handleOkPacket(data []byte) error {
 
 // Read Packets as Field Packets until EOF-Packet or an Error appears
 // http://dev.mysql.com/doc/internals/en/com-query-response.html#packet-Protocol::ColumnDefinition41
-func (mc *MysqlConn) readColumns(count int) ([]mysqlField, error) {
+func (mc *mysqlConn) readColumns(count int) ([]mysqlField, error) {
 	columns := make([]mysqlField, count)
 
 	for i := 0; ; i++ {
@@ -862,7 +946,7 @@ func (rows *textRows) readRow(dest []driver.Value) error {
 }
 
 // Reads Packets until EOF-Packet or an Error appears. Returns count of Packets read
-func (mc *MysqlConn) readUntilEOF() error {
+func (mc *mysqlConn) readUntilEOF() error {
 	for {
 		data, err := mc.readPacket()
 		if err != nil {
@@ -880,6 +964,25 @@ func (mc *MysqlConn) readUntilEOF() error {
 		}
 	}
 }
+func (mc *mysqlConn) ReadRawUntilEOF() error {
+	for {
+		data, err := mc.ReadRawPacket()
+		if err != nil {
+			return err
+		}
+
+		switch data[4] {
+		case iERR:
+			return mc.handleErrorPacket(data)
+		case iEOF:
+			if len(data) == 5 {
+				mc.status = readStatus(data[3:])
+			}
+			return nil
+		}
+	}
+}
+
 
 /******************************************************************************
 *                           Prepared Statements                               *
@@ -1204,7 +1307,7 @@ func (stmt *mysqlStmt) writeExecutePacket(args []driver.Value) error {
 	return mc.writePacket(data)
 }
 
-func (mc *MysqlConn) discardResults() error {
+func (mc *mysqlConn) discardResults() error {
 	for mc.status&statusMoreResultsExists != 0 {
 		resLen, err := mc.readResultSetHeaderPacket()
 		if err != nil {

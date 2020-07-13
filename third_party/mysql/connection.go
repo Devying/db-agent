@@ -19,7 +19,7 @@ import (
 	"time"
 )
 
-type MysqlConn struct {
+type mysqlConn struct {
 	buf              buffer
 	netConn          net.Conn
 	rawConn          net.Conn // underlying connection when netConn is TLS connection.
@@ -45,7 +45,7 @@ type MysqlConn struct {
 }
 
 // Handles parameters set in DSN after the connection is established
-func (mc *MysqlConn) handleParams() (err error) {
+func (mc *mysqlConn) handleParams() (err error) {
 	for param, val := range mc.cfg.Params {
 		switch param {
 		// Charset
@@ -74,7 +74,7 @@ func (mc *MysqlConn) handleParams() (err error) {
 	return
 }
 
-func (mc *MysqlConn) markBadConn(err error) error {
+func (mc *mysqlConn) markBadConn(err error) error {
 	if mc == nil {
 		return err
 	}
@@ -84,11 +84,11 @@ func (mc *MysqlConn) markBadConn(err error) error {
 	return driver.ErrBadConn
 }
 
-func (mc *MysqlConn) Begin() (driver.Tx, error) {
+func (mc *mysqlConn) Begin() (driver.Tx, error) {
 	return mc.begin(false)
 }
 
-func (mc *MysqlConn) begin(readOnly bool) (driver.Tx, error) {
+func (mc *mysqlConn) begin(readOnly bool) (driver.Tx, error) {
 	if mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -106,7 +106,7 @@ func (mc *MysqlConn) begin(readOnly bool) (driver.Tx, error) {
 	return nil, mc.markBadConn(err)
 }
 
-func (mc *MysqlConn) Close() (err error) {
+func (mc *mysqlConn) Close() (err error) {
 	// Makes Close idempotent
 	if !mc.closed.IsSet() {
 		err = mc.writeCommandPacket(comQuit)
@@ -121,7 +121,7 @@ func (mc *MysqlConn) Close() (err error) {
 // function after successfully authentication, call Close instead. This function
 // is called before auth or on auth failure because MySQL will have already
 // closed the network connection.
-func (mc *MysqlConn) cleanup() {
+func (mc *mysqlConn) cleanup() {
 	if !mc.closed.TrySet(true) {
 		return
 	}
@@ -136,7 +136,7 @@ func (mc *MysqlConn) cleanup() {
 	}
 }
 
-func (mc *MysqlConn) error() error {
+func (mc *mysqlConn) error() error {
 	if mc.closed.IsSet() {
 		if err := mc.canceled.Value(); err != nil {
 			return err
@@ -146,12 +146,13 @@ func (mc *MysqlConn) error() error {
 	return nil
 }
 
-func (mc *MysqlConn) Prepare(query string) (driver.Stmt, error) {
+func (mc *mysqlConn) Prepare(query string) (driver.Stmt, error) {
 	if mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
 	}
 	// Send command
+	println("prepare------")
 	err := mc.writeCommandPacketStr(comStmtPrepare, query)
 	if err != nil {
 		// STMT_PREPARE is safe to retry.  So we can return ErrBadConn here.
@@ -165,6 +166,9 @@ func (mc *MysqlConn) Prepare(query string) (driver.Stmt, error) {
 
 	// Read Result
 	columnCount, err := stmt.readPrepareResultPacket()
+	//columnCount
+	println("column :",columnCount)
+	println("stmt.paramCount :",stmt.paramCount)
 	if err == nil {
 		if stmt.paramCount > 0 {
 			if err = mc.readUntilEOF(); err != nil {
@@ -180,7 +184,7 @@ func (mc *MysqlConn) Prepare(query string) (driver.Stmt, error) {
 	return stmt, err
 }
 
-func (mc *MysqlConn) interpolateParams(query string, args []driver.Value) (string, error) {
+func (mc *mysqlConn) interpolateParams(query string, args []driver.Value) (string, error) {
 	// Number of ? should be same to len(args)
 	if strings.Count(query, "?") != len(args) {
 		return "", driver.ErrSkip
@@ -305,7 +309,7 @@ func (mc *MysqlConn) interpolateParams(query string, args []driver.Value) (strin
 	return string(buf), nil
 }
 
-func (mc *MysqlConn) Exec(query string, args []driver.Value) (driver.Result, error) {
+func (mc *mysqlConn) Exec(query string, args []driver.Value) (driver.Result, error) {
 	if mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -335,7 +339,7 @@ func (mc *MysqlConn) Exec(query string, args []driver.Value) (driver.Result, err
 }
 
 // Internal function to execute commands
-func (mc *MysqlConn) exec(query string) error {
+func (mc *mysqlConn) exec(query string) error {
 	// Send command
 	if err := mc.writeCommandPacketStr(comQuery, query); err != nil {
 		return mc.markBadConn(err)
@@ -362,11 +366,11 @@ func (mc *MysqlConn) exec(query string) error {
 	return mc.discardResults()
 }
 
-func (mc *MysqlConn) Query(query string, args []driver.Value) (driver.Rows, error) {
+func (mc *mysqlConn) Query(query string, args []driver.Value) (driver.Rows, error) {
 	return mc.query(query, args)
 }
 
-func (mc *MysqlConn) query(query string, args []driver.Value) (*textRows, error) {
+func (mc *mysqlConn) query(query string, args []driver.Value) (*textRows, error) {
 	if mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -413,7 +417,7 @@ func (mc *MysqlConn) query(query string, args []driver.Value) (*textRows, error)
 
 // Gets the value of the given MySQL System Variable
 // The returned byte slice is only valid until the next read
-func (mc *MysqlConn) getSystemVar(name string) ([]byte, error) {
+func (mc *mysqlConn) getSystemVar(name string) ([]byte, error) {
 	// Send command
 	if err := mc.writeCommandPacketStr(comQuery, "SELECT @@"+name); err != nil {
 		return nil, err
@@ -442,13 +446,13 @@ func (mc *MysqlConn) getSystemVar(name string) ([]byte, error) {
 }
 
 // finish is called when the query has canceled.
-func (mc *MysqlConn) cancel(err error) {
+func (mc *mysqlConn) cancel(err error) {
 	mc.canceled.Set(err)
 	mc.cleanup()
 }
 
 // finish is called when the query has succeeded.
-func (mc *MysqlConn) finish() {
+func (mc *mysqlConn) finish() {
 	if !mc.watching || mc.finished == nil {
 		return
 	}
@@ -460,7 +464,7 @@ func (mc *MysqlConn) finish() {
 }
 
 // Ping implements driver.Pinger interface
-func (mc *MysqlConn) Ping(ctx context.Context) (err error) {
+func (mc *mysqlConn) Ping(ctx context.Context) (err error) {
 	if mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return driver.ErrBadConn
@@ -479,7 +483,7 @@ func (mc *MysqlConn) Ping(ctx context.Context) (err error) {
 }
 
 // BeginTx implements driver.ConnBeginTx interface
-func (mc *MysqlConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
+func (mc *mysqlConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver.Tx, error) {
 	if err := mc.watchCancel(ctx); err != nil {
 		return nil, err
 	}
@@ -499,7 +503,7 @@ func (mc *MysqlConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver
 	return mc.begin(opts.ReadOnly)
 }
 
-func (mc *MysqlConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
+func (mc *mysqlConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	dargs, err := namedValueToValue(args)
 	if err != nil {
 		return nil, err
@@ -518,7 +522,7 @@ func (mc *MysqlConn) QueryContext(ctx context.Context, query string, args []driv
 	return rows, err
 }
 
-func (mc *MysqlConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
+func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	dargs, err := namedValueToValue(args)
 	if err != nil {
 		return nil, err
@@ -532,7 +536,7 @@ func (mc *MysqlConn) ExecContext(ctx context.Context, query string, args []drive
 	return mc.Exec(query, dargs)
 }
 
-func (mc *MysqlConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
 	if err := mc.watchCancel(ctx); err != nil {
 		return nil, err
 	}
@@ -585,7 +589,7 @@ func (stmt *mysqlStmt) ExecContext(ctx context.Context, args []driver.NamedValue
 	return stmt.Exec(dargs)
 }
 
-func (mc *MysqlConn) watchCancel(ctx context.Context) error {
+func (mc *mysqlConn) watchCancel(ctx context.Context) error {
 	if mc.watching {
 		// Reach here if canceled,
 		// so the connection is already invalid
@@ -610,7 +614,7 @@ func (mc *MysqlConn) watchCancel(ctx context.Context) error {
 	return nil
 }
 
-func (mc *MysqlConn) startWatcher() {
+func (mc *mysqlConn) startWatcher() {
 	watcher := make(chan context.Context, 1)
 	mc.watcher = watcher
 	finished := make(chan struct{})
@@ -635,14 +639,14 @@ func (mc *MysqlConn) startWatcher() {
 	}()
 }
 
-func (mc *MysqlConn) CheckNamedValue(nv *driver.NamedValue) (err error) {
+func (mc *mysqlConn) CheckNamedValue(nv *driver.NamedValue) (err error) {
 	nv.Value, err = converter{}.ConvertValue(nv.Value)
 	return
 }
 
 // ResetSession implements driver.SessionResetter.
 // (From Go 1.10)
-func (mc *MysqlConn) ResetSession(ctx context.Context) error {
+func (mc *mysqlConn) ResetSession(ctx context.Context) error {
 	if mc.closed.IsSet() {
 		return driver.ErrBadConn
 	}

@@ -1,58 +1,87 @@
 package config
 
 import (
+	"fmt"
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/viper"
 )
-
 type Config struct {
-	Server Server
-	Databases map[string]DBConf
+	Port int `yaml:"port"`
+	Log string `yaml:"log"`
+	DB string `yaml:"db"`
 }
-
-type Server struct {
-	Port int
-	Log string
-	DB string
+type MysqlConfig struct {
+	Host string `mapstructure:"host"`
+	Port int `mapstructure:"port"`
+	User string `mapstructure:"user"`
+	Pass string `mapstructure:"pass"`
+	DB string `mapstructure:"db"`
+	MaxOpenConn int `mapstructure:"max_open_conn"`
+	MaxIdleConn int `mapstructure:"max_idle_conn"`
 }
-type DBConf struct {
-	Host string
-	Port int
-	User string
-	Pass string
+type RedisConfig struct {
+	Host string `mapstructure:"host"`
+	Port int `mapstructure:"port"`
+	MaxIdleConn int `mapstructure:"max_idle_conn"`
+	MaxOpenConn int `mapstructure:"max_open_conn"`
 }
-var Conf = new(Config)
-func ParseConf() {
+func ParseConf() *Config{
 	viper.SetConfigName("env")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/github.com/Devying/db-agent/conf")
+	viper.AddConfigPath("$HOME/Project/db-agent/conf")
 	err := viper.ReadInConfig()
 	if err != nil {
 		panic(err)
 	}
-	var s Server
+	var s Config
 	err = viper.Unmarshal(&s)
 	if err != nil {
 		panic(err)
 	}
 	if s.DB != "redis" && s.DB != "mysql" {
-		panic("Unsupported database,Only redis or mysql")
+		panic("Unsupported database,only redis or mysql")
 	}
+	fmt.Println(s)
+	return &s
+}
+func ParseMysqlConfig() map[string]MysqlConfig{
 	viper.SetConfigName("db")
 	viper.SetConfigType("yaml")
-	err = viper.ReadInConfig()
+	viper.AddConfigPath("$HOME/Project/db-agent/conf")
+	err := viper.ReadInConfig()
 	if err != nil {
 		panic(err)
 	}
-	var dbs map[string]DBConf
-	dbConfig := viper.GetStringMap(s.DB)
-	err = mapstructure.Decode(dbConfig,&dbs)
+	conf := viper.Get("mysql")
+	var mysqlConfig map[string]MysqlConfig
+	err = mapstructure.Decode(conf,&mysqlConfig)
 	if err != nil {
 		panic(err)
 	}
-	if len(dbs)==0 {
-		panic("DataBase config is empty")
+	fmt.Println(mysqlConfig)
+	return mysqlConfig
+}
+
+func ParseRedisConfig() map[string]RedisConfig{
+	viper.SetConfigName("db")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath("$HOME/Project/db-agent/conf")
+	err := viper.ReadInConfig()
+	if err != nil {
+		panic(err)
 	}
-	Conf.Server = s
-	Conf.Databases = dbs
+	var config map[string]interface{}
+	err = viper.Unmarshal(&config)
+	if err != nil {
+		panic(err)
+	}
+	if _,ok := config["redis"];!ok{
+		panic("database config is empty")
+	}
+	var redisConfig map[string]RedisConfig
+	err = mapstructure.Decode(config["mysql"],&redisConfig)
+	if err != nil {
+		panic(err)
+	}
+	return redisConfig
 }

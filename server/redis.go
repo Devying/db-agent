@@ -3,8 +3,6 @@ package server
 import (
 	"bufio"
 	"bytes"
-	"github.com/Devying/db-agent/config"
-	"github.com/Devying/db-agent/third_party/redigo/redis"
 	"errors"
 	"fmt"
 	"io"
@@ -12,43 +10,51 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Devying/db-agent/config"
+	"github.com/Devying/db-agent/third_party/redigo/redis"
 )
 
 type Redis struct {
-	Pool map[string]*redis.Pool
-	Conf map[string]config.DBConf
-	Port int
+	Conf   map[string]config.RedisConfig
+	Ins map[string]*RedisInstance
 }
-func (r *Redis)GetPort()int{
-	return r.Port
+type RedisInstance struct {
+	Pool *redis.Pool
 }
-func (r *Redis)GetPool(ins string)(*redis.Pool,error){
-	if pool,ok := r.Pool[ins];ok{
-		return pool,nil
+func (r *Redis)Config()error{
+	r.Conf = config.ParseRedisConfig()
+	return nil
+}
+
+func (r *Redis)GetIns(ins string)(*RedisInstance,error){
+	if ins,ok := r.Ins[ins];ok{
+		return ins,nil
 	}
 	return nil,errors.New("instance does not exist")
 }
-func (r *Redis)Initialize(){
-	r.Pool = make(map[string]*redis.Pool)
-	for ins,conf:= range r.Conf{
-		r.Pool[ins] = &redis.Pool{
+func (r *Redis)Initialize() error{
+	r.Ins = make(map[string]*RedisInstance)
+	for k,v:= range r.Conf{
+		ins := &RedisInstance{}
+		ins.Pool = &redis.Pool{
 			MaxIdle:     500,
 			IdleTimeout: 240 * time.Second,
 			Dial: func() (redis.Conn, error) {
-				c, err := redis.Dial("tcp", conf.Host+":"+strconv.Itoa(conf.Port))
+				c, err := redis.Dial("tcp", v.Host+":"+strconv.Itoa(v.Port))
 				if err != nil {
 					return nil, err
 				}
 				return c, err
 			},
-
 			TestOnBorrow: func(c redis.Conn, t time.Time) error {
 				_, err := c.Do("PING")
 				return err
 			},
 		}
+		r.Ins[k] =ins
 	}
-
+	return nil
 }
 func (r *Redis)Process(conn net.Conn){
 	buf := bufio.NewReader(conn)
@@ -89,7 +95,7 @@ func (r *Redis)Process(conn net.Conn){
 			}
 			continue
 		}
-		pool ,err := r.GetPool(ins)
+		ins ,err := r.GetIns(ins)
 		if err != nil {
 			_, e := conn.Write(r.ErrorRes(err))
 			if e != nil {
@@ -97,7 +103,7 @@ func (r *Redis)Process(conn net.Conn){
 			}
 			continue
 		}
-		resp,err := pool.Get().DoProtocol(protocol)
+		resp,err := ins.Pool.Get().DoProtocol(protocol)
 		fmt.Println("resp",resp,err)
 		if err != nil {
 			_, e := conn.Write(r.ErrorRes(err))

@@ -10,20 +10,22 @@ package mysql
 
 import (
 	"context"
+	"database/sql/driver"
 	"net"
 )
 
 type connector struct {
 	cfg *Config // immutable private copy.
+	conn *mysqlConn
 }
 
 // Connect implements driver.Connector interface.
 // Connect returns a connection to the database.
-func (c *connector) Connect(ctx context.Context) (*MysqlConn, error) {
+func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	var err error
 
-	// New MysqlConn
-	mc := &MysqlConn{
+	// New mysqlConn
+	mc := &mysqlConn{
 		maxAllowedPacket: maxPacketSize,
 		maxWriteSize:     maxPacketSize - 1,
 		closech:          make(chan struct{}),
@@ -134,12 +136,15 @@ func (c *connector) Connect(ctx context.Context) (*MysqlConn, error) {
 		mc.Close()
 		return nil, err
 	}
-
+	c.conn = mc
 	return mc, nil
 }
 
 // Driver implements driver.Connector interface.
 // Driver returns &MySQLDriver{}.
-//func (c *connector) Driver() driver.Driver {
-//	return &MySQLDriver{}
-//}
+func (c *connector) Driver() driver.Driver {
+	return &MySQLDriver{connector:c}
+}
+func (c *connector)GetConn() *mysqlConn{
+	return c.conn
+}

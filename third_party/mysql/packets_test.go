@@ -94,9 +94,9 @@ func (m *mockConn) SetWriteDeadline(t time.Time) error {
 // make sure mockConn implements the net.Conn interface
 var _ net.Conn = new(mockConn)
 
-func newRWMockConn(sequence uint8) (*mockConn, *MysqlConn) {
+func newRWMockConn(sequence uint8) (*mockConn, *mysqlConn) {
 	conn := new(mockConn)
-	mc := &MysqlConn{
+	mc := &mysqlConn{
 		buf:              newBuffer(conn),
 		cfg:              NewConfig(),
 		netConn:          conn,
@@ -109,7 +109,7 @@ func newRWMockConn(sequence uint8) (*mockConn, *MysqlConn) {
 
 func TestReadPacketSingleByte(t *testing.T) {
 	conn := new(mockConn)
-	mc := &MysqlConn{
+	mc := &mysqlConn{
 		buf: newBuffer(conn),
 	}
 
@@ -129,7 +129,7 @@ func TestReadPacketSingleByte(t *testing.T) {
 
 func TestReadPacketWrongSequenceID(t *testing.T) {
 	conn := new(mockConn)
-	mc := &MysqlConn{
+	mc := &mysqlConn{
 		buf: newBuffer(conn),
 	}
 
@@ -157,7 +157,7 @@ func TestReadPacketWrongSequenceID(t *testing.T) {
 
 func TestReadPacketSplit(t *testing.T) {
 	conn := new(mockConn)
-	mc := &MysqlConn{
+	mc := &mysqlConn{
 		buf: newBuffer(conn),
 	}
 
@@ -262,7 +262,7 @@ func TestReadPacketSplit(t *testing.T) {
 
 func TestReadPacketFail(t *testing.T) {
 	conn := new(mockConn)
-	mc := &MysqlConn{
+	mc := &mysqlConn{
 		buf:     newBuffer(conn),
 		closech: make(chan struct{}),
 	}
@@ -305,7 +305,7 @@ func TestReadPacketFail(t *testing.T) {
 // not-NUL terminated plugin_name in init packet
 func TestRegression801(t *testing.T) {
 	conn := new(mockConn)
-	mc := &MysqlConn{
+	mc := &mysqlConn{
 		buf:      newBuffer(conn),
 		cfg:      new(Config),
 		sequence: 42,

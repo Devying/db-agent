@@ -16,7 +16,7 @@ import (
 )
 
 type mysqlStmt struct {
-	mc         *MysqlConn
+	mc         *mysqlConn
 	id         uint32
 	paramCount int
 }

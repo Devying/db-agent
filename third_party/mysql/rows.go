@@ -22,7 +22,7 @@ type resultSet struct {
 }
 
 type mysqlRows struct {
-	mc     *MysqlConn
+	mc     *mysqlConn
 	rs     resultSet
 	finish func()
 }
