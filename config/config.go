@@ -28,7 +28,7 @@ type RedisConfig struct {
 func ParseConf() *Config{
 	viper.SetConfigName("env")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/db-agent/conf")
+	viper.AddConfigPath("$HOME/db-agent/conf")
 	err := viper.ReadInConfig()
 	if err != nil {
 		panic(err)
@@ -47,7 +47,7 @@ func ParseConf() *Config{
 func ParseMysqlConfig() map[string]MysqlConfig{
 	viper.SetConfigName("db")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/db-agent/conf")
+	viper.AddConfigPath("$HOME/db-agent/conf")
 	err := viper.ReadInConfig()
 	if err != nil {
 		panic(err)
@@ -65,7 +65,7 @@ func ParseMysqlConfig() map[string]MysqlConfig{
 func ParseRedisConfig() map[string]RedisConfig{
 	viper.SetConfigName("db")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/db-agent/conf")
+	viper.AddConfigPath("$HOME/db-agent/conf")
 	err := viper.ReadInConfig()
 	if err != nil {
 		panic(err)
@@ -79,7 +79,7 @@ func ParseRedisConfig() map[string]RedisConfig{
 		panic("database config is empty")
 	}
 	var redisConfig map[string]RedisConfig
-	err = mapstructure.Decode(config["mysql"],&redisConfig)
+	err = mapstructure.Decode(config["redis"],&redisConfig)
 	if err != nil {
 		panic(err)
 	}

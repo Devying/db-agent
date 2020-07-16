@@ -62,6 +62,7 @@ func (r *Redis)Process(conn net.Conn){
 	for {
 		//读取协议
 		protocol, err := ReadProtocol(buf)
+		println("-----------", )
 		if err == io.EOF {
 			println("client exit")
 			//连接断开了
@@ -76,6 +77,7 @@ func (r *Redis)Process(conn net.Conn){
 			continue
 		}
 		cmdLine := r.DecodeProtocol(protocol)
+
 		//解析连接
 		if len(cmdLine)==1 && strings.ToUpper(cmdLine[0])=="COMMAND"{
 			_,e :=conn.Write([]byte("+OK\r\n"))
@@ -84,10 +86,20 @@ func (r *Redis)Process(conn net.Conn){
 			}
 			continue
 		}
-		//解析ping协议 获取要连接的实例
-		if len(cmdLine)==2 && strings.ToUpper(cmdLine[0])=="PING"{
-			ins = strings.ToLower(cmdLine[1])
+		//解析auth协议 获取要连接的实例
+		if len(cmdLine)==2 && strings.ToUpper(cmdLine[0])=="AUTH"{
+			//protocol = r.EncodeProtocol(protocol)
+			s := strings.Split(strings.ToLower(cmdLine[1]), "@")
+			if len(s) < 2 {
+				_, e := conn.Write(r.ErrorRes(errors.New("instance error")))
+				if e != nil {
+					return
+				}
+				continue
+			}
+			ins = s[1]
 		}
+
 		if ins == "" {
 			_, e := conn.Write(r.ErrorRes(errors.New("select an instance")))
 			if e != nil {
@@ -103,7 +115,9 @@ func (r *Redis)Process(conn net.Conn){
 			}
 			continue
 		}
-		resp,err := ins.Pool.Get().DoProtocol(protocol)
+		println(ins.Pool.ActiveCount(), ins.Pool.IdleCount())
+		rConn := ins.Pool.Get()
+		resp,err := rConn.DoProtocol(protocol)
 		fmt.Println("resp",resp,err)
 		if err != nil {
 			_, e := conn.Write(r.ErrorRes(err))
@@ -129,6 +143,26 @@ func (r *Redis)DecodeProtocol(p []byte)[]string{
 		cmdLine = append(cmdLine,string(cmd[i+1]))
 	}
 	return cmdLine
+}
+
+func (r *Redis) EncodeProtocol(p []byte) []byte  {
+	if len(p)==0{
+		return []byte{}
+	}
+	cmd := bytes.Split(p,[]byte{'\r','\n'})
+	var protocol []byte
+	for i := 0; i < len(cmd); i++ {
+		if i == len(cmd) - 2 {
+			s := strings.Split(string(cmd[i]), "@")
+			protocol = append(protocol, []byte(s[0])...)
+		} else {
+			protocol = append(protocol, cmd[i]...)
+		}
+		if len(cmd[i]) > 0 {
+			protocol = append(protocol, []byte("\r\n")...)
+		}
+	}
+	return protocol
 }
 
 func readProtocolLine(buf *bufio.Reader) ([]byte, error) {
