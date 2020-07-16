@@ -54,6 +54,9 @@ func (m *Mysql) Initialize() error {
 }
 func (m *Mysql) Process(conn net.Conn) {
 	//server 回复认证信息
+	defer func() {
+		_ = conn.Close()
+	}()
 	var err error
 	err = m.Auth(conn)
 	if err != nil {
@@ -80,39 +83,37 @@ func (m *Mysql) Process(conn net.Conn) {
 	}
 	err = m.AuthOK(conn)
 	if err != nil {
-		fmt.Println(err, "send authok packet error")
+		fmt.Println(err, "client connect get lost")
 		return
 	}
 	mct := mi.driver.GetConnector()
 	if mct == nil {
-		panic("mct nil")
+		_ = m.ErrResp(conn, "server connector error")
+		return
 	}
 	mc := mct.GetConn()
 	if mc == nil {
-		panic("mc nil")
+		_ = m.ErrResp(conn, "server connect error")
+		return
 	}
 	//开始处理正常的包
 	for {
 		//读取客户端发送的协议
 		data, err := mi.ReadPacket(buf)
 		if err == io.EOF {
-			conn.Close()
-			println("close...")
+			println("client quit")
 			return
 		}
-		//
 		if err != nil && err != io.EOF {
 			fmt.Println(err)
 			break
 		}
-		fmt.Println("client send", string(data))
-		fmt.Println("client send", data)
-
 		//向mysql server写入客户端发送的协议
 		err = mc.WriteRawPacket(data)
 		if err != nil {
-			fmt.Println("write server err:", err)
-			break
+			//fmt.Println("write server err:", err)
+			_ = m.ErrResp(conn, "server send data error")
+			continue
 		}
 		//tt := []byte{1,0, 0, 0, 1}
 		//err = mc.WriteRawPacket(tt)

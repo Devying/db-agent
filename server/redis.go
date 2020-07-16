@@ -37,24 +37,31 @@ func (r *Redis)Initialize() error{
 	r.Ins = make(map[string]*RedisInstance)
 	for k,v:= range r.Conf{
 		ins := &RedisInstance{}
-		ins.Pool = &redis.Pool{
-			MaxIdle:     500,
-			IdleTimeout: 240 * time.Second,
-			Dial: func() (redis.Conn, error) {
-				c, err := redis.Dial("tcp", v.Host+":"+strconv.Itoa(v.Port))
-				if err != nil {
-					return nil, err
-				}
-				return c, err
-			},
-			TestOnBorrow: func(c redis.Conn, t time.Time) error {
-				_, err := c.Do("PING")
-				return err
-			},
-		}
+		ins.Pool = newPool(v.Host+":"+strconv.Itoa(v.Port))
 		r.Ins[k] =ins
 	}
+	fmt.Println(r.Ins)
 	return nil
+}
+func newPool(server string) *redis.Pool{
+	return &redis.Pool{
+		MaxIdle:     500,
+		IdleTimeout: 240 * time.Second,
+
+		Dial: func() (redis.Conn, error) {
+			c, err := redis.Dial("tcp", server)
+			if err != nil {
+				return nil, err
+			}
+			return c, err
+		},
+		Wait: true, //超时等待否则太多连接会报read: connection reset by peer
+
+		TestOnBorrow: func(c redis.Conn, t time.Time) error {
+			_, err := c.Do("PING")
+			return err
+		},
+	}
 }
 func (r *Redis)Process(conn net.Conn){
 	buf := bufio.NewReader(conn)
@@ -98,6 +105,8 @@ func (r *Redis)Process(conn net.Conn){
 				continue
 			}
 			ins = s[1]
+			conn.Write([]byte("+OK\r\n"))
+			continue
 		}
 
 		if ins == "" {
