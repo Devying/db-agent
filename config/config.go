@@ -1,14 +1,21 @@
 package config
 
 import (
+	"flag"
 	"fmt"
 	"github.com/mitchellh/mapstructure"
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 )
+
+var Conf *Config
+
 type Config struct {
 	Port int `yaml:"port"`
 	Log string `yaml:"log"`
 	DB string `yaml:"db"`
+	Redis string `yaml:"redis"`
+	Mysql string `yaml:"mysql"`
 }
 type MysqlConfig struct {
 	Host string `mapstructure:"host"`
@@ -25,36 +32,42 @@ type RedisConfig struct {
 	MaxIdleConn int `mapstructure:"max_idle_conn"`
 	MaxOpenConn int `mapstructure:"max_open_conn"`
 }
+
+var confFile = flag.String("conf", "", "")
+
 func ParseConf() *Config{
-	viper.SetConfigName("env")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/db-agent/conf")
-	err := viper.ReadInConfig()
+	flag.Parse()
+	if *confFile == "" {
+		panic("confFile empty")
+	}
+	conf, err := ioutil.ReadFile(*confFile)
 	if err != nil {
 		panic(err)
 	}
+
 	var s Config
-	err = viper.Unmarshal(&s)
+	err = yaml.Unmarshal(conf, &s)
 	if err != nil {
 		panic(err)
 	}
 	if s.DB != "redis" && s.DB != "mysql" {
 		panic("Unsupported database,only redis or mysql")
 	}
-	fmt.Println(s)
 	return &s
 }
 func ParseMysqlConfig() map[string]MysqlConfig{
-	viper.SetConfigName("db")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/db-agent/conf")
-	err := viper.ReadInConfig()
+	conf, err := ioutil.ReadFile(Conf.Mysql)
 	if err != nil {
 		panic(err)
 	}
-	conf := viper.Get("mysql")
+
+	m := make(map[string]interface{})
+	if err := yaml.Unmarshal(conf, m); err != nil {
+		panic(err)
+	}
+
 	var mysqlConfig map[string]MysqlConfig
-	err = mapstructure.Decode(conf,&mysqlConfig)
+	err = mapstructure.Decode(m,&mysqlConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -63,23 +76,16 @@ func ParseMysqlConfig() map[string]MysqlConfig{
 }
 
 func ParseRedisConfig() map[string]RedisConfig{
-	viper.SetConfigName("db")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath("$HOME/Project/db-agent/conf")
-	err := viper.ReadInConfig()
+	conf, err := ioutil.ReadFile(Conf.Redis)
 	if err != nil {
 		panic(err)
 	}
-	var config map[string]interface{}
-	err = viper.Unmarshal(&config)
-	if err != nil {
+	m := make(map[string]interface{})
+	if err := yaml.Unmarshal(conf, &m); err != nil {
 		panic(err)
-	}
-	if _,ok := config["redis"];!ok{
-		panic("database config is empty")
 	}
 	var redisConfig map[string]RedisConfig
-	err = mapstructure.Decode(config["redis"],&redisConfig)
+	err = mapstructure.Decode(m,&redisConfig)
 	if err != nil {
 		panic(err)
 	}

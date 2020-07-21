@@ -1,6 +1,7 @@
 package server
 
 import (
+	"github.com/Devying/db-agent/config"
 	"net"
 )
 
@@ -11,7 +12,7 @@ type DB interface {
 }
 
 func NewDB() DB {
-	switch Conf.DB{
+	switch config.Conf.DB{
 	case "redis":
 		return &Redis{}
 	case "mysql":

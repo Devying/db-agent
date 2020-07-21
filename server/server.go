@@ -5,13 +5,13 @@ import (
 	"net"
 	"strconv"
 )
-var Conf *config.Config
+
 func Init()  {
-	Conf = config.ParseConf()
+	config.Conf = config.ParseConf()
 }
 func Start() {
 	var err error
-	l,err := net.Listen("tcp",":"+strconv.Itoa(Conf.Port))
+	l,err := net.Listen("tcp",":"+strconv.Itoa(config.Conf.Port))
 	if err != nil {
 		panic(err)
 	}
@@ -24,7 +24,7 @@ func Start() {
 	if err != nil {
 		panic(err)
 	}
-	println("listing",Conf.Port)
+	println("listing",config.Conf.Port)
 	for{
 		conn,err := l.Accept()
 		if err != nil {
