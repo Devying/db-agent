@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	vlog "github.com/Devying/db-agent/log"
 	"io"
 	"net"
 	"strconv"
@@ -46,7 +47,7 @@ func (r *Redis)Initialize() error{
 func newPool(server string) *redis.Pool{
 	return &redis.Pool{
 		MaxIdle:     500,
-		IdleTimeout: 240 * time.Second,
+		IdleTimeout: 2400 * time.Second,
 
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
@@ -124,9 +125,11 @@ func (r *Redis)Process(conn net.Conn){
 			}
 			continue
 		}
-		println(ins.Pool.ActiveCount(), ins.Pool.IdleCount())
-		rConn := ins.Pool.Get()
-		resp,err := rConn.DoProtocol(protocol)
+		pcn := ins.Pool.Get()
+		resp,err := pcn.DoProtocol(protocol)
+		if cnErr := pcn.Close(); cnErr != nil { //释放连接到连接池
+			vlog.Errorf("[Process] release pconn err: %s", cnErr.Error())
+		}
 		fmt.Println("resp",resp,err)
 		if err != nil {
 			_, e := conn.Write(r.ErrorRes(err))
