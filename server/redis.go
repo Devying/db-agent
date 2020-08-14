@@ -128,7 +128,7 @@ func (r *Redis)Process(conn net.Conn){
 		pcn := ins.Pool.Get()
 		resp,err := pcn.DoProtocol(protocol)
 		if cnErr := pcn.Close(); cnErr != nil { //释放连接到连接池
-			vlog.Errorf("[Process] release pconn err: %s", cnErr.Error())
+			vlog.Errorf("[Process] release pcn err: %s", cnErr.Error())
 		}
 		fmt.Println("resp",resp,err)
 		if err != nil {
