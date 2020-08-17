@@ -17,37 +17,37 @@ import (
 )
 
 type Redis struct {
-	Conf   map[string]config.RedisConfig
-	Ins map[string]*RedisInstance
+	Conf map[string]config.RedisConfig
+	Ins  map[string]*RedisInstance
 }
 type RedisInstance struct {
 	Pool *redis.Pool
 }
-func (r *Redis)Config()error{
+
+func (r *Redis) Config() error {
 	r.Conf = config.ParseRedisConfig()
 	return nil
 }
 
-func (r *Redis)GetIns(ins string)(*RedisInstance,error){
-	if ins,ok := r.Ins[ins];ok{
-		return ins,nil
+func (r *Redis) GetIns(ins string) (*RedisInstance, error) {
+	if ins, ok := r.Ins[ins]; ok {
+		return ins, nil
 	}
-	return nil,errors.New("instance does not exist")
+	return nil, errors.New("instance does not exist")
 }
-func (r *Redis)Initialize() error{
+func (r *Redis) Initialize() error {
 	r.Ins = make(map[string]*RedisInstance)
-	for k,v:= range r.Conf{
+	for k, v := range r.Conf {
 		ins := &RedisInstance{}
-		ins.Pool = newPool(v.Host+":"+strconv.Itoa(v.Port))
-		r.Ins[k] =ins
+		ins.Pool = newPool(v.Host + ":" + strconv.Itoa(v.Port))
+		r.Ins[k] = ins
 	}
-	fmt.Println(r.Ins)
 	return nil
 }
-func newPool(server string) *redis.Pool{
+func newPool(server string) *redis.Pool {
 	return &redis.Pool{
 		MaxIdle:     500,
-		IdleTimeout: 1 * time.Minute,
+		IdleTimeout: 2 * time.Minute,
 
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
@@ -59,24 +59,27 @@ func newPool(server string) *redis.Pool{
 		Wait: true, //超时等待否则太多连接会报read: connection reset by peer
 
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
-			_, err := c.Do("PING")
-			return err
+			if time.Since(t) < time.Minute {
+				return nil
+			}
+			if _, err := c.Do("PING"); err != nil {
+				vlog.Errorf("[newPool] pcn ping err: %s", err.Error())
+				return err
+			}
+			return nil
 		},
 	}
 }
-func (r *Redis)Process(conn net.Conn){
+func (r *Redis) Process(conn net.Conn) {
 	buf := bufio.NewReader(conn)
 	var ins string
 	for {
 		//读取协议
 		protocol, err := ReadProtocol(buf)
-		println("-----------", )
 		if err == io.EOF {
-			println("client exit")
-			//连接断开了
+			vlog.Infoln("[Redis Process] client exit")
 			return
 		}
-		println(string(protocol))
 		if err != nil {
 			_, e := conn.Write(r.ErrorRes(err))
 			if e != nil {
@@ -87,20 +90,22 @@ func (r *Redis)Process(conn net.Conn){
 		cmdLine := r.DecodeProtocol(protocol)
 
 		//解析连接
-		if len(cmdLine)==1 && strings.ToUpper(cmdLine[0])=="COMMAND"{
-			_,e :=conn.Write([]byte("+OK\r\n"))
+		if len(cmdLine) == 1 && strings.ToUpper(cmdLine[0]) == "COMMAND" {
+			_, e := conn.Write([]byte("+OK\r\n"))
 			if e != nil {
+				vlog.Errorf("[Redis Process] write err: %s", e.Error())
 				return
 			}
 			continue
 		}
 		//解析auth协议 获取要连接的实例
-		if len(cmdLine)==2 && strings.ToUpper(cmdLine[0])=="AUTH"{
+		if len(cmdLine) == 2 && strings.ToUpper(cmdLine[0]) == "AUTH" {
 			//protocol = r.EncodeProtocol(protocol)
 			s := strings.Split(strings.ToLower(cmdLine[1]), "@")
 			if len(s) < 2 {
 				_, e := conn.Write(r.ErrorRes(errors.New("instance error")))
 				if e != nil {
+					vlog.Errorf("[Redis Process] write err: %s", e.Error())
 					return
 				}
 				continue
@@ -113,11 +118,12 @@ func (r *Redis)Process(conn net.Conn){
 		if ins == "" {
 			_, e := conn.Write(r.ErrorRes(errors.New("select an instance")))
 			if e != nil {
+				vlog.Errorf("[Redis Process] write err: %s", e.Error())
 				return
 			}
 			continue
 		}
-		ins ,err := r.GetIns(ins)
+		ins, err := r.GetIns(ins)
 		if err != nil {
 			_, e := conn.Write(r.ErrorRes(err))
 			if e != nil {
@@ -126,45 +132,47 @@ func (r *Redis)Process(conn net.Conn){
 			continue
 		}
 		pcn := ins.Pool.Get()
-		resp,err := pcn.DoProtocol(protocol)
-		if cnErr := pcn.Close(); cnErr != nil { //释放连接到连接池
-			vlog.Errorf("[Process] release pcn err: %s", cnErr.Error())
+		resp, err := pcn.DoProtocol(protocol)
+		if pcnErr := pcn.Close(); pcnErr != nil { //释放连接到连接池
+			vlog.Errorf("[Redis Process] release pcn err: %s", pcnErr.Error())
 		}
-		fmt.Println("resp",resp,err)
 		if err != nil {
+			vlog.Errorf("[Redis Process] DoProtocol err: %s", err.Error())
 			_, e := conn.Write(r.ErrorRes(err))
 			if e != nil {
+				vlog.Errorf("[Redis Process] write err: %s", e.Error())
 				return
 			}
 			continue
 		}
 		_, e := conn.Write(resp)
 		if e != nil {
+			vlog.Errorf("[Redis Process] write err: %s", err.Error())
 			return
 		}
 	}
 }
-func (r *Redis)DecodeProtocol(p []byte)[]string{
-	if len(p)==0{
+func (r *Redis) DecodeProtocol(p []byte) []string {
+	if len(p) == 0 {
 		return []string{}
 	}
-	cmd := bytes.Split(p,[]byte{'\r','\n'})
-	cmd = cmd[1:len(cmd)-1]
+	cmd := bytes.Split(p, []byte{'\r', '\n'})
+	cmd = cmd[1 : len(cmd)-1]
 	var cmdLine []string
-	for i:=0;i<len(cmd);i+=2{
-		cmdLine = append(cmdLine,string(cmd[i+1]))
+	for i := 0; i < len(cmd); i += 2 {
+		cmdLine = append(cmdLine, string(cmd[i+1]))
 	}
 	return cmdLine
 }
 
-func (r *Redis) EncodeProtocol(p []byte) []byte  {
-	if len(p)==0{
+func (r *Redis) EncodeProtocol(p []byte) []byte {
+	if len(p) == 0 {
 		return []byte{}
 	}
-	cmd := bytes.Split(p,[]byte{'\r','\n'})
+	cmd := bytes.Split(p, []byte{'\r', '\n'})
 	var protocol []byte
 	for i := 0; i < len(cmd); i++ {
-		if i == len(cmd) - 2 {
+		if i == len(cmd)-2 {
 			s := strings.Split(string(cmd[i]), "@")
 			protocol = append(protocol, []byte(s[0])...)
 		} else {
@@ -180,7 +188,7 @@ func (r *Redis) EncodeProtocol(p []byte) []byte  {
 func readProtocolLine(buf *bufio.Reader) ([]byte, error) {
 	p, err := buf.ReadBytes('\n')
 	if err == bufio.ErrBufferFull {
-		return nil,errors.New("long request line")
+		return nil, errors.New("long request line")
 	}
 	if err != nil {
 		return nil, err
@@ -191,6 +199,7 @@ func readProtocolLine(buf *bufio.Reader) ([]byte, error) {
 	}
 	return p, nil
 }
+
 // parseLen parses bulk string and array lengths.
 func parseProtocolLen(p []byte) (int, error) {
 	if len(p) == 0 {
@@ -289,6 +298,6 @@ func ReadProtocol(buf *bufio.Reader) ([]byte, error) {
 	}
 	return nil, errors.New("unexpected response line")
 }
-func (r *Redis)ErrorRes(err error)[]byte{
-	return []byte("-"+fmt.Sprintf("%s",err)+"\r\n")
+func (r *Redis) ErrorRes(err error) []byte {
+	return []byte("-" + fmt.Sprintf("%s", err) + "\r\n")
 }
