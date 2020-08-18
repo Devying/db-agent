@@ -46,6 +46,8 @@ type Conn interface {
 
 	DoProtocol([]byte)([]byte,error)
 
+	IsRetryableError(err error) bool
+
 }
 
 // Argument is the interface implemented by an object which wants to control how

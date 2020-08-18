@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/Devying/db-agent/third_party/redigo/internal"
 	"io"
 	"net"
 	"net/url"
@@ -800,4 +801,8 @@ func (c *conn) DoProtocol(p []byte) ([]byte,error){
 		return nil, c.fatal(err)
 	}
 	return reply, nil
+}
+
+func (c *conn) IsRetryableError (err error) bool  {
+	return internal.IsRetryableError(err)
 }

@@ -48,6 +48,7 @@ func newPool(server string) *redis.Pool {
 	return &redis.Pool{
 		MaxIdle:     500,
 		IdleTimeout: 2 * time.Minute,
+		MaxRetries:  3,
 
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
@@ -131,24 +132,34 @@ func (r *Redis) Process(conn net.Conn) {
 			}
 			continue
 		}
-		pcn := ins.Pool.Get()
-		resp, err := pcn.DoProtocol(protocol)
-		if pcnErr := pcn.Close(); pcnErr != nil { //释放连接到连接池
-			vlog.Errorf("[Redis Process] release pcn err: %s", pcnErr.Error())
-		}
-		if err != nil {
-			vlog.Errorf("[Redis Process] DoProtocol err: %s", err.Error())
-			_, e := conn.Write(r.ErrorRes(err))
+
+		for attempt := 0; attempt < ins.Pool.MaxRetries; attempt++ {
+			if attempt > 0 {
+				time.Sleep(8 * time.Millisecond)
+			}
+			pcn := ins.Pool.Get()
+			resp, err := pcn.DoProtocol(protocol)
+			if pcnErr := pcn.Close(); pcnErr != nil { //释放连接到连接池
+				vlog.Errorf("[Redis Process] release pcn err: %s", pcnErr.Error())
+			}
+			if err != nil {
+				vlog.Errorf("[Redis Process] DoProtocol err: %s", err.Error())
+				if pcn.IsRetryableError(err) {
+					continue
+				}
+				_, e := conn.Write(r.ErrorRes(err))
+				if e != nil {
+					vlog.Errorf("[Redis Process] write err: %s", e.Error())
+					return
+				}
+				break
+			}
+			_, e := conn.Write(resp)
 			if e != nil {
-				vlog.Errorf("[Redis Process] write err: %s", e.Error())
+				vlog.Errorf("[Redis Process] write err: %s", err.Error())
 				return
 			}
-			continue
-		}
-		_, e := conn.Write(resp)
-		if e != nil {
-			vlog.Errorf("[Redis Process] write err: %s", err.Error())
-			return
+			break
 		}
 	}
 }

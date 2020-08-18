@@ -161,6 +161,10 @@ type Pool struct {
 	active int           // the number of open connections in the pool
 	ch     chan struct{} // limits open connections when p.Wait is true
 	idle   idleList      // idle connections
+
+	// Maximum number of retries before giving up.
+	// Default is to not retry failed commands.
+	MaxRetries int
 }
 
 // NewPool creates a new pool.
@@ -454,6 +458,10 @@ func (ac *activeConn) DoProtocol(p []byte) (reply []byte, err error) {
 	return pc.c.DoProtocol(p)
 }
 
+func (ac *activeConn) IsRetryableError(err error) bool  {
+	return internal.IsRetryableError(err)
+}
+
 func (ac *activeConn) DoWithTimeout(timeout time.Duration, commandName string, args ...interface{}) (reply interface{}, err error) {
 	pc := ac.pc
 	if pc == nil {
@@ -510,6 +518,7 @@ type errorConn struct{ err error }
 
 func (ec errorConn) Do(string, ...interface{}) (interface{}, error) { return nil, ec.err }
 func (ec errorConn) DoProtocol([]byte) ([]byte, error)              { return nil, ec.err }
+func (ec errorConn) IsRetryableError(err error) bool 				{ return true }
 func (ec errorConn) DoWithTimeout(time.Duration, string, ...interface{}) (interface{}, error) {
 	return nil, ec.err
 }
