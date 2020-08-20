@@ -540,7 +540,6 @@ func (mc *mysqlConn) writeHandshakeResponsePacket(authResp []byte, plugin string
 	pos++
 
 	// Send Auth packet
-	fmt.Println("auth :data:",string(data[:pos]))
 	return mc.writePacket(data[:pos])
 }
 

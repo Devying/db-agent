@@ -1,5 +1,5 @@
 log: "./logs"
-db: "redis"
+db: "mysql"
 port: 9980
 redis: "./conf/redis.yaml"
 mysql: "./conf/mysql.yaml"

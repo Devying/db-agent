@@ -2,7 +2,6 @@ package config
 
 import (
 	"flag"
-	"fmt"
 	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -71,7 +70,6 @@ func ParseMysqlConfig() map[string]MysqlConfig{
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(mysqlConfig)
 	return mysqlConfig
 }
 
