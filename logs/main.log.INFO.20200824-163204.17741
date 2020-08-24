@@ -1,0 +1,5 @@
+Log file created at: 2020/08/24 16:32:04
+Running on machine: bj-m-210418a
+Binary: Built with gc go1.12.2 for darwin/amd64
+Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
+I0824 16:32:04.658937   17741 main.go:9] DB agent is starting.listening port: 9980
