@@ -45,10 +45,12 @@ func (r *Redis) Initialize() error {
 	return nil
 }
 func newPool(server string) *redis.Pool {
-	return &redis.Pool{
-		MaxIdle:     500,
-		IdleTimeout: 2 * time.Minute,
-		MaxRetries:  3,
+	p := &redis.Pool{
+		MaxIdle:           500,
+		IdleTimeout:       2 * time.Minute,
+		MaxRetries:        3,
+		MaxActive:         500,
+		CheckIdleConnFreq: 2 * time.Second,
 
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", server)
@@ -57,7 +59,7 @@ func newPool(server string) *redis.Pool {
 			}
 			return c, err
 		},
-		Wait: true, //超时等待否则太多连接会报read: connection reset by peer
+		Wait: true, //超过连接池最大连接数等待(需同时配置MaxActive参数)，否则太多连接会报read: connection reset by peer
 
 		TestOnBorrow: func(c redis.Conn, t time.Time) error {
 			if time.Since(t) < time.Minute {
@@ -70,8 +72,17 @@ func newPool(server string) *redis.Pool {
 			return nil
 		},
 	}
+
+	go p.Clear(p.CheckIdleConnFreq)
+
+	return p
 }
 func (r *Redis) Process(conn net.Conn) {
+	defer func() {
+		if err := conn.Close(); err != nil {
+			vlog.Errorf("agent conn close err: %s", err.Error())
+		}
+	}()
 	buf := bufio.NewReader(conn)
 	var ins string
 	for {
@@ -156,7 +167,7 @@ func (r *Redis) Process(conn net.Conn) {
 			}
 			_, e := conn.Write(resp)
 			if e != nil {
-				vlog.Errorf("[Redis Process] write err: %s", err.Error())
+				vlog.Errorf("[Redis Process] write err: %s", e.Error())
 				return
 			}
 			break
@@ -229,7 +240,6 @@ func parseProtocolLen(p []byte) (int, error) {
 		}
 		n *= 10
 		if b < '0' || b > '9' {
-			println("eeeeeeee")
 			return -1, errors.New("illegal bytes in length")
 		}
 		n += int(b - '0')
@@ -276,7 +286,6 @@ func ReadProtocol(buf *bufio.Reader) ([]byte, error) {
 	if len(line) == 0 {
 		return nil, errors.New("short response line")
 	}
-	println(string(line))
 	switch line[0] {
 	case '$':
 		n, err := parseProtocolLen(line[1:])

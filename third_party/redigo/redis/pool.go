@@ -165,6 +165,9 @@ type Pool struct {
 	// Maximum number of retries before giving up.
 	// Default is to not retry failed commands.
 	MaxRetries int
+
+	// Check Idle connections frequency
+	CheckIdleConnFreq time.Duration
 }
 
 // NewPool creates a new pool.
@@ -289,20 +292,21 @@ func (p *Pool) get(ctx interface {
 		}
 	}
 
-	p.mu.Lock()
-
 	// Prune stale connections at the back of the idle list.
-	if p.IdleTimeout > 0 {
-		n := p.idle.count
-		for i := 0; i < n && p.idle.back != nil && p.idle.back.t.Add(p.IdleTimeout).Before(nowFunc()); i++ {
-			pc := p.idle.back
-			p.idle.popBack()
-			p.mu.Unlock()
-			pc.c.Close()
-			p.mu.Lock()
-			p.active--
-		}
-	}
+	//if p.IdleTimeout > 0 {
+	//	n := p.idle.count
+	//	for i := 0; i < n && p.idle.back != nil && p.idle.back.t.Add(p.IdleTimeout).Before(nowFunc()); i++ {
+	//		pc := p.idle.back
+	//		p.idle.popBack()
+	//		p.mu.Unlock()
+	//		pc.c.Close()
+	//		p.mu.Lock()
+	//		p.active--
+	//	}
+	//}
+	p.clearStaleConns()
+
+	p.mu.Lock()
 
 	// Get idle connection from the front of idle list.
 	for p.idle.front != nil {
@@ -370,6 +374,34 @@ func (p *Pool) put(pc *poolConn, forceClose bool) error {
 	}
 	p.mu.Unlock()
 	return nil
+}
+
+// Clear stale connections
+func (p *Pool) Clear (checkIdleConnFreq time.Duration)  {
+	ticker := time.NewTicker(checkIdleConnFreq)
+	defer ticker.Stop()
+	for range ticker.C {
+		if p.closed {
+			break
+		}
+		p.clearStaleConns()
+	}
+}
+
+func (p *Pool) clearStaleConns ()  {
+	if p.IdleTimeout > 0 {
+		n := p.idle.count
+		p.mu.Lock()
+		for i := 0; i < n && p.idle.back != nil && p.idle.back.t.Add(p.IdleTimeout).Before(nowFunc()); i++ {
+			pc := p.idle.back
+			p.idle.popBack()
+			p.mu.Unlock()
+			pc.c.Close()
+			p.mu.Lock()
+			p.active--
+		}
+		p.mu.Unlock()
+	}
 }
 
 type activeConn struct {
