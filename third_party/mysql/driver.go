@@ -110,6 +110,5 @@ func (d MySQLDriver) OpenConnector(dsn string) (driver.Connector, error) {
 }
 
 func (d MySQLDriver) GetConnector() *connector {
-
 	return d.connector
 }

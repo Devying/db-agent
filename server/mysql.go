@@ -11,7 +11,6 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"time"
 )
 
 type Mysql struct {
@@ -36,23 +35,12 @@ func (m *Mysql) Initialize() error {
 		if err != nil  {
 			return err
 		}
-		fmt.Println(v)
 		db.SetMaxOpenConns(v.MaxOpenConn)
 		db.SetMaxIdleConns(v.MaxIdleConn)
-		db.SetConnMaxLifetime(3600 * time.Second)
-		//go func() {
-		//	tc := time.Tick(10 * time.Second)
-		//	for {
-		//		select {
-		//		case <-tc:
-					err = db.Ping()
-					if err != nil  {
-						fmt.Println(err)
-					}
-		//		}
-		//	}
-		//}()
-		//_, err = db.Query("select id from task_user_0.users_0 limit 10")
+		err = db.Ping()
+		if err != nil  {
+			return err
+		}
 		ins := &MysqlInstance{}
 		mi,ok := db.Driver().(*mysql.MySQLDriver)
 		if !ok {
@@ -65,7 +53,6 @@ func (m *Mysql) Initialize() error {
 }
 func (m *Mysql) Process(conn net.Conn) {
 	//server 回复认证信息
-	fmt.Println(conn.RemoteAddr(), "request")
 	defer func() {
 		_ = conn.Close()
 		fmt.Println(conn.RemoteAddr(), "exit")
@@ -325,11 +312,6 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	if len(db)<2{
 		return nil, errors.New("client error")
 	}
-	//没有指定db
-	if len(db[1])== 0{
-		return []byte("mysql@task"),nil
-	}
-
 	dbName := db[1][int(db[1][0]+1):]
 	return dbName,nil
 }
