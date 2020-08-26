@@ -354,14 +354,10 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	if len(db)<2{
 		return nil, errors.New("client error")
 	}
-<<<<<<< Updated upstream
-=======
 	//没有指定db
 	if len(db[1])== 0{
 		return []byte("mysql@dft"),nil
 	}
-
->>>>>>> Stashed changes
 	dbName := db[1][int(db[1][0]+1):]
 	return dbName,nil
 }
