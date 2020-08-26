@@ -4,13 +4,27 @@ center:
   user: "ug_task"
   pass: "1q2w3e123"
   db: "task_center"
-  max_open_conn: 1000
-  max_idle_conn: 500
+  max_open_conn: 9000
+  max_idle_conn: 4500
+  init_pool_size: 5
+  max_pool_size: 9000
 task:
   host: "10.77.96.30"
   port: 3306
   user: "ug_task"
   pass: "1q2w3e123"
   db: "task_user_0"
-  max_open_conn: 1000
-  max_idle_conn: 500
+  max_open_conn: 9000
+  max_idle_conn: 4500
+  init_pool_size: 5
+  max_pool_size: 9000
+dft:
+    host: "10.77.96.30"
+    port: 3306
+    user: "ug_task"
+    pass: "1q2w3e123"
+    db: "mysqlslap"
+    max_open_conn: 9000
+    max_idle_conn: 4500
+    init_pool_size: 5
+    max_pool_size: 9000

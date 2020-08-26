@@ -9,6 +9,7 @@
 package mysql
 
 import (
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -79,14 +80,13 @@ func (b *buffer) fill(need int) error {
 
 	b.buf = dest
 	b.idx = 0
-
 	for {
 		if b.timeout > 0 {
 			if err := b.nc.SetReadDeadline(time.Now().Add(b.timeout)); err != nil {
+				fmt.Println("SetReadDeadline",b.nc)
 				return err
 			}
 		}
-
 		nn, err := b.nc.Read(b.buf[n:])
 		n += nn
 
@@ -103,9 +103,11 @@ func (b *buffer) fill(need int) error {
 				b.length = n
 				return nil
 			}
+			fmt.Println("is here?:",err)
 			return io.ErrUnexpectedEOF
 
 		default:
+			fmt.Println("net read error",err,b.nc)
 			return err
 		}
 	}

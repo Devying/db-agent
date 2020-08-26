@@ -11,11 +11,12 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"time"
 )
 
 type Mysql struct {
 	Conf   map[string]config.MysqlConfig
-	Ins map[string]*MysqlInstance
+	Ins map[string]chan *MysqlInstance
 }
 type MysqlInstance struct {
 	driver *mysql.MySQLDriver
@@ -27,29 +28,58 @@ func (m *Mysql)Config() error{
 }
 
 func (m *Mysql) Initialize() error {
-	m.Ins = make(map[string]*MysqlInstance)
+	//初始化连接池
+	m.Ins = make(map[string]chan *MysqlInstance)
 	for k,v := range m.Conf{
-		var err error
-		dsn := v.User+":"+v.Pass+"@tcp("+v.Host+":"+strconv.Itoa(v.Port)+")/"+v.DB
-		db,err := sql.Open("mysql", dsn)
-		if err != nil  {
-			return err
+		fmt.Println(v)
+		m.Ins[k] = make(chan *MysqlInstance,v.MaxPoolSize)
+		for i:=0;i<v.InitPoolSize;i++{
+			ins,err := m.Connect(v)
+			if err != nil {
+				panic(err)
+			}
+			m.Ins[k] <- ins
 		}
-		db.SetMaxOpenConns(v.MaxOpenConn)
-		db.SetMaxIdleConns(v.MaxIdleConn)
-		err = db.Ping()
-		if err != nil  {
-			return err
-		}
-		ins := &MysqlInstance{}
-		mi,ok := db.Driver().(*mysql.MySQLDriver)
-		if !ok {
-			return errors.New("mysql driver error")
-		}
-		ins.driver = mi
-		m.Ins[k] = ins
 	}
 	return nil
+}
+
+func (m *Mysql)Connect(v config.MysqlConfig) (*MysqlInstance,error){
+	dsn := v.User+":"+v.Pass+"@tcp("+v.Host+":"+strconv.Itoa(v.Port)+")/"+v.DB+"?net_write_timeout=6000"
+	db,err := sql.Open("mysql", dsn)
+	if err != nil  {
+		return nil,err
+	}
+	db.SetConnMaxLifetime(12 * time.Hour)
+	err = db.Ping()
+	if err != nil {
+		return nil,err
+	}
+	ins := &MysqlInstance{}
+	mi,ok := db.Driver().(*mysql.MySQLDriver)
+	if !ok {
+		return nil,errors.New("mysql driver error")
+	}
+	ins.driver = mi
+	return ins,nil
+}
+
+func (m *Mysql)GetPool(ins string) (*MysqlInstance,error){
+	select {
+		case p := <-m.Ins[ins]:
+			return p,nil
+		default:
+			return m.Connect(m.Conf[ins])
+	}
+}
+
+func (m *Mysql)PutPool(ins string,pool *MysqlInstance) error{
+	select {
+	case m.Ins[ins]<-pool:
+		return nil
+	default:
+		return nil
+	}
 }
 func (m *Mysql) Process(conn net.Conn) {
 	//server 回复认证信息
@@ -60,25 +90,31 @@ func (m *Mysql) Process(conn net.Conn) {
 	var err error
 	err = m.Auth(conn)
 	if err != nil {
-		//fmt.Println(err, "auth packet error")
+		fmt.Println(err, "auth packet error")
 		return
 	}
 	buf := bufio.NewReader(conn)
 	dbName,err := m.ClientInfo(buf)
 	if err != nil {
-		//fmt.Println(err,"read client info error")
+		fmt.Println(err,"read client info error")
 		return
 	}
 
 	insByte := bytes.Split(dbName,[]byte{'@'})
 	if len(insByte)<2{
-		_ = m.ErrResp(conn, "ins not specified")
+		_ = m.ErrResp(2,conn, "ins not specified")
 		return
 	}
 	insName := string(insByte[len(insByte)-1])
-	mi,ok := m.Ins[insName]
+	_,ok := m.Ins[insName]
 	if !ok {
-		_ = m.ErrResp(conn, "ins not exists")
+		_ = m.ErrResp(2,conn, "ins not exists")
+		return
+	}
+	pool,err := m.GetPool(insName)
+	if err != nil {
+		fmt.Println("get pool error :",err)
+		_ = m.ErrResp(2,conn, "connect failed")
 		return
 	}
 	err = m.AuthOK(conn)
@@ -86,44 +122,50 @@ func (m *Mysql) Process(conn net.Conn) {
 		//fmt.Println(err, "client connect get lost")
 		return
 	}
-	mct := mi.driver.GetConnector()
+	mct := pool.driver.GetConnector()
 	if mct == nil {
-		_ = m.ErrResp(conn, "server connector error")
+		_ = m.ErrResp(1,conn, "server connector error")
 		return
 	}
 	mc := mct.GetConn()
 	if mc == nil {
-		_ = m.ErrResp(conn, "server connect error")
+		fmt.Println("connn error")
+		_ = m.ErrResp(1,conn, "server connect error")
 		return
 	}
 	//开始处理client发过来的包
 	defer func() {
 		//重置seq
-		mi.seq = 0
+		pool.seq = 0
+		_ = m.PutPool(insName,pool)
+		//_= pool.driver.GetConnector().GetConn().Close()
 	}()
 	for {
-		clientData, err := mi.ReadPacket(buf)
+		clientData, err := pool.ReadPacket(buf)
+		//fmt.Println("send:",clientData)
 		if err == io.EOF {
+			fmt.Println("send:EOF err")
 			return
 		}
 		if err != nil && err != io.EOF {
 			//println("not EOF err")
-			//fmt.Println(err)
+			fmt.Println(err)
 			return
 		}
 		//向mysql server写入客户端发送的协议
 		err = mc.WriteRawPacket(clientData)
 		if err != nil {
 			//agent 向server 写数据失败 需要给client 返回错误
-			_ = m.ErrResp(conn, "send data to server error")
+			_ = m.ErrResp(2,conn, "send data to server error")
 			continue
 		}
 		var serverData []byte
 		var fieldLen int
 		//首先需要读取首次数据报，以此判断是否需要读取多次。
 		first, err := mc.ReadRawPacket()
+		//fmt.Println("first:",first)
 		if err != nil {
-			_ = m.ErrResp(conn, "receive data from server error")
+			_ = m.ErrResp(2,conn, "receive data from server error")
 			continue
 		}
 		serverData = append(serverData, first...)
@@ -166,7 +208,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		}
 		_,_= conn.Write(serverData)
 		//重置seq
-		mi.seq = 0
+		pool.seq = 0
 	}
 
 }
@@ -305,13 +347,21 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	auth =append(auth,header...)
 	auth =append(auth,body...)
 	//从第36个字节开始解析链接信息
-	fmt.Println(string(auth))
+	//fmt.Println(string(auth))
 	dbInfo := auth[36:]
 	//分割协议(0x00分割)，第一段为用户名、第二段为密码+数据库名（其中第一个字节表示密码长度）
 	db := bytes.Split(dbInfo,[]byte{0})
 	if len(db)<2{
 		return nil, errors.New("client error")
 	}
+<<<<<<< Updated upstream
+=======
+	//没有指定db
+	if len(db[1])== 0{
+		return []byte("mysql@dft"),nil
+	}
+
+>>>>>>> Stashed changes
 	dbName := db[1][int(db[1][0]+1):]
 	return dbName,nil
 }
@@ -321,7 +371,7 @@ func (m *Mysql)AuthOK(conn net.Conn)error {
 	_,err := conn.Write(authOK)
 	return err
 }
-func (m *Mysql)ErrResp(conn net.Conn,msg string)error {
+func (m *Mysql)ErrResp(seq byte,conn net.Conn,msg string)error {
 	//出现错误回复
 	head := make([]byte,4)
 	//1个0xff+2个错误代码
@@ -330,7 +380,7 @@ func (m *Mysql)ErrResp(conn net.Conn,msg string)error {
 	head[1] = byte(pktLen >> 8)
 	head[2] = byte(pktLen >> 16)
 	//建立连接后是第三部的开始所以这里序号是2
-	head[3] = 2
+	head[3] = seq
 	var data []byte
 	data = append(data,head...)
 	//0xff 表示错误状态

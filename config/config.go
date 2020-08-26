@@ -24,6 +24,8 @@ type MysqlConfig struct {
 	DB string `mapstructure:"db"`
 	MaxOpenConn int `mapstructure:"max_open_conn"`
 	MaxIdleConn int `mapstructure:"max_idle_conn"`
+	InitPoolSize int `mapstructure:"init_pool_size"`
+	MaxPoolSize int `mapstructure:"max_pool_size"`
 }
 type RedisConfig struct {
 	Host string `mapstructure:"host"`

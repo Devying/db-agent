@@ -34,6 +34,7 @@ func (mc *mysqlConn) readPacket() ([]byte, error) {
 				return nil, cerr
 			}
 			errLog.Print(err)
+			fmt.Println("invalid conn",mc.netConn)
 			mc.Close()
 			return nil, ErrInvalidConn
 		}
@@ -330,6 +331,7 @@ func (mc *mysqlConn) ReadRawPacket() ([]byte, error) {
 // http://dev.mysql.com/doc/internals/en/connection-phase-packets.html#packet-Protocol::Handshake
 func (mc *mysqlConn) readHandshakePacket() (data []byte, plugin string, err error) {
 	data, err = mc.readPacket()
+	fmt.Println("readHandshakePacket Err",err,mc.netConn)
 	if err != nil {
 		// for init we can rewrite this to ErrBadConn for sql.Driver to retry, since
 		// in connection initialization we don't risk retrying non-idempotent actions.
@@ -565,8 +567,8 @@ func (mc *mysqlConn) writeAuthSwitchPacket(authData []byte) error {
 func (mc *mysqlConn) writeCommandPacket(command byte) error {
 	// Reset Packet Sequence
 	mc.sequence = 0
-
 	data, err := mc.buf.takeSmallBuffer(4 + 1)
+
 	if err != nil {
 		// cannot take the buffer. Something must be wrong with the connection
 		errLog.Print(err)
@@ -632,6 +634,7 @@ func (mc *mysqlConn) writeCommandPacketUint32(command byte, arg uint32) error {
 
 func (mc *mysqlConn) readAuthResult() ([]byte, string, error) {
 	data, err := mc.readPacket()
+	fmt.Println("readAuthResult error:",err,mc.netConn)
 	if err != nil {
 		return nil, "", err
 	}
@@ -667,6 +670,8 @@ func (mc *mysqlConn) readAuthResult() ([]byte, string, error) {
 func (mc *mysqlConn) readResultOK() error {
 	data, err := mc.readPacket()
 	if err != nil {
+		fmt.Println("readResultOK error ",mc.netConn)
+		panic(err)
 		return err
 	}
 

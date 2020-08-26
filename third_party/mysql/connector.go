@@ -70,6 +70,7 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 		mc.cleanup()
 		return nil, err
 	}
+	//连接认证完成后执行finish
 	defer mc.finish()
 
 	mc.buf = newBuffer(mc.netConn)
@@ -107,6 +108,7 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 	}
 
 	// Handle response to auth packet, switch methods if possible
+	//这里出现了EOF
 	if err = mc.handleAuthResult(authData, plugin); err != nil {
 		// Authentication failed and MySQL has already closed the connection
 		// (https://dev.mysql.com/doc/internals/en/authentication-fails.html).

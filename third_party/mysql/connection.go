@@ -12,6 +12,7 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"io"
 	"net"
 	"strconv"
@@ -466,6 +467,7 @@ func (mc *mysqlConn) finish() {
 // Ping implements driver.Pinger interface
 func (mc *mysqlConn) Ping(ctx context.Context) (err error) {
 	if mc.closed.IsSet() {
+		fmt.Println("mc.closed set")
 		errLog.Print(ErrInvalidConn)
 		return driver.ErrBadConn
 	}
@@ -479,7 +481,9 @@ func (mc *mysqlConn) Ping(ctx context.Context) (err error) {
 		return mc.markBadConn(err)
 	}
 
-	return mc.readResultOK()
+	err = mc.readResultOK()
+	//fmt.Println("write ok :",mc.netConn,"read error:",err)
+	return err
 }
 
 // BeginTx implements driver.ConnBeginTx interface
