@@ -46,10 +46,11 @@ func (r *Redis) Initialize() error {
 }
 func newPool(server string) *redis.Pool {
 	p := &redis.Pool{
-		MaxIdle:           500,
+		MaxIdle:           1000,
+		MinIdle:           500,
 		IdleTimeout:       2 * time.Minute,
 		MaxRetries:        3,
-		MaxActive:         500,
+		MaxActive:         1000,
 		CheckIdleConnFreq: 2 * time.Second,
 
 		Dial: func() (redis.Conn, error) {
@@ -73,6 +74,7 @@ func newPool(server string) *redis.Pool {
 		},
 	}
 
+	go p.CheckMinIdles()
 	go p.Clear(p.CheckIdleConnFreq)
 
 	return p
@@ -148,6 +150,7 @@ func (r *Redis) Process(conn net.Conn) {
 			if attempt > 0 {
 				time.Sleep(8 * time.Millisecond)
 			}
+			vlog.Infof("activeCount: %d, idleCount: %d", ins.Pool.ActiveCount(), ins.Pool.IdleCount())
 			pcn := ins.Pool.Get()
 			resp, err := pcn.DoProtocol(protocol)
 			if pcnErr := pcn.Close(); pcnErr != nil { //释放连接到连接池

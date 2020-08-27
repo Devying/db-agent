@@ -137,6 +137,8 @@ type Pool struct {
 	// Maximum number of idle connections in the pool.
 	MaxIdle int
 
+	MinIdle int
+
 	// Maximum number of connections allocated by the pool at a given time.
 	// When zero, there is no limit on the number of connections in the pool.
 	MaxActive int
@@ -401,6 +403,25 @@ func (p *Pool) clearStaleConns ()  {
 			p.active--
 		}
 		p.mu.Unlock()
+	}
+}
+
+// 初始化最小连接
+func (p *Pool) CheckMinIdles ()  {
+	if p.closed || p.active == p.MaxActive {
+		return
+	}
+	for i := 0; i < p.MinIdle; i++  {
+		c, err := p.Dial()
+		if err != nil {
+			continue
+		}
+		pcn := &poolConn{c: c, created: nowFunc()}
+		err = p.put(pcn, false)
+		if err != nil {
+			continue
+		}
+		p.active++
 	}
 }
 
