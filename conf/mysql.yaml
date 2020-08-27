@@ -8,7 +8,17 @@ center:
   max_idle_conn: 4500
   init_pool_size: 5
   max_pool_size: 9000
-task:
+task0:
+  host: "10.77.96.30"
+  port: 3306
+  user: "ug_task"
+  pass: "1q2w3e123"
+  db: "task_user_0"
+  max_open_conn: 9000
+  max_idle_conn: 4500
+  init_pool_size: 5
+  max_pool_size: 9000
+task1:
   host: "10.77.96.30"
   port: 3306
   user: "ug_task"
@@ -23,8 +33,19 @@ dft:
     port: 3306
     user: "ug_task"
     pass: "1q2w3e123"
-    db: "mysqlslap"
+    db: ""
     max_open_conn: 9000
     max_idle_conn: 4500
     init_pool_size: 5
     max_pool_size: 9000
+  sysbenchtest
+sysbenchtest:
+  host: "10.77.96.30"
+  port: 3306
+  user: "ug_task"
+  pass: "1q2w3e123"
+  db: "sysbenchtest"
+  max_open_conn: 9000
+  max_idle_conn: 4500
+  init_pool_size: 5
+  max_pool_size: 9000

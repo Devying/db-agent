@@ -89,13 +89,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		fmt.Println(err,"read client info error")
 		return
 	}
-
-	insByte := bytes.Split(dbName,[]byte{'@'})
-	if len(insByte)<2{
-		_ = m.ErrResp(2,conn, "ins not specified")
-		return
-	}
-	insName := string(insByte[len(insByte)-1])
+	insName := string(dbName)
 	_,ok := m.Ins[insName]
 	if !ok {
 		_ = m.ErrResp(2,conn, "ins not exists")
@@ -126,6 +120,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		//_= pool.driver.GetConnector().GetConn().Close()
 	}()
 	for {
+		fmt.Println("process========>",conn.RemoteAddr())
 		clientData, err := pool.ReadPacket(buf)
 		//fmt.Println("send:",clientData)
 		if err == io.EOF {
@@ -331,17 +326,22 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	var auth []byte
 	auth =append(auth,header...)
 	auth =append(auth,body...)
-	//从第36个字节开始解析链接信息
+	//4.1后从第36个字节开始解析链接信息
 	//fmt.Println(string(auth))
+	capabilities := auth[4:8]
+
+	fmt.Println(capabilities)
 	dbInfo := auth[36:]
-	//分割协议(0x00分割)，第一段为用户名、第二段为密码+数据库名（其中第一个字节表示密码长度）
-	db := bytes.Split(dbInfo,[]byte{0})
+
+	//分割协议(0x00分割)，第一段为用户名、第二段为认证信息+数据库名（其中第一个字节表示认证信息长度）
+	db := bytes.Split(dbInfo,[]byte{0x00})
 	if len(db)<2{
 		return nil, errors.New("client error")
 	}
+
 	//没有指定db
-	if len(db[1])== 0{
-		return []byte("mysql@dft"),nil
+	if len(db[1])== 0||len(db)<=3{
+		return []byte("dft"),nil
 	}
 	dbName := db[1][int(db[1][0]+1):]
 	return dbName,nil
