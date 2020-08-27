@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"bytes"
-	"database/sql"
 	"errors"
 	"fmt"
 	"github.com/Devying/db-agent/config"
@@ -11,7 +10,6 @@ import (
 	"io"
 	"net"
 	"strconv"
-	"time"
 )
 
 type Mysql struct {
@@ -19,7 +17,7 @@ type Mysql struct {
 	Ins map[string]chan *MysqlInstance
 }
 type MysqlInstance struct {
-	driver *mysql.MySQLDriver
+	md mysql.MySQLDriver
 	seq    byte
 }
 func (m *Mysql)Config() error{
@@ -46,21 +44,13 @@ func (m *Mysql) Initialize() error {
 
 func (m *Mysql)Connect(v config.MysqlConfig) (*MysqlInstance,error){
 	dsn := v.User+":"+v.Pass+"@tcp("+v.Host+":"+strconv.Itoa(v.Port)+")/"+v.DB+"?net_write_timeout=6000"
-	db,err := sql.Open("mysql", dsn)
-	if err != nil  {
-		return nil,err
-	}
-	db.SetConnMaxLifetime(12 * time.Hour)
-	err = db.Ping()
+	dv := mysql.MySQLDriver{}
+	_,err  := dv.Open(dsn)
 	if err != nil {
 		return nil,err
 	}
 	ins := &MysqlInstance{}
-	mi,ok := db.Driver().(*mysql.MySQLDriver)
-	if !ok {
-		return nil,errors.New("mysql driver error")
-	}
-	ins.driver = mi
+	ins.md = dv
 	return ins,nil
 }
 
@@ -122,12 +112,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		//fmt.Println(err, "client connect get lost")
 		return
 	}
-	mct := pool.driver.GetConnector()
-	if mct == nil {
-		_ = m.ErrResp(1,conn, "server connector error")
-		return
-	}
-	mc := mct.GetConn()
+	mc := pool.md.MC
 	if mc == nil {
 		fmt.Println("connn error")
 		_ = m.ErrResp(1,conn, "server connect error")

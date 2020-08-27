@@ -10,18 +10,16 @@ package mysql
 
 import (
 	"context"
-	"database/sql/driver"
 	"net"
 )
 
 type connector struct {
 	cfg *Config // immutable private copy.
-	conn *mysqlConn
 }
-
+type MC *mysqlConn
 // Connect implements driver.Connector interface.
 // Connect returns a connection to the database.
-func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
+func (c *connector) Connect(ctx context.Context) (*mysqlConn, error) {
 	var err error
 
 	// New mysqlConn
@@ -138,15 +136,8 @@ func (c *connector) Connect(ctx context.Context) (driver.Conn, error) {
 		mc.Close()
 		return nil, err
 	}
-	c.conn = mc
 	return mc, nil
 }
 
 // Driver implements driver.Connector interface.
 // Driver returns &MySQLDriver{}.
-func (c *connector) Driver() driver.Driver {
-	return &MySQLDriver{connector:c}
-}
-func (c *connector)GetConn() *mysqlConn{
-	return c.conn
-}
