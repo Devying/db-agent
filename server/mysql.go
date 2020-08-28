@@ -125,7 +125,7 @@ func (m *Mysql) Process(conn net.Conn) {
 	for {
 		fmt.Println("process========>",conn.RemoteAddr())
 		clientData, err := pool.ReadPacket(buf)
-		//fmt.Println("send:",clientData)
+		fmt.Println("send:",clientData)
 		if err == io.EOF {
 			//fmt.Println("send:EOF err")
 			return
@@ -159,9 +159,9 @@ func (m *Mysql) Process(conn net.Conn) {
 			//https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
 			//根据first包解析是否需要继续读取
 			// Column count [16 bit uint]
-			columnCount := binary.LittleEndian.Uint16(first[5:7])
+			columnCount := binary.LittleEndian.Uint16(first[9:11])
 			// Param count [16 bit uint]
-			paramCount := int(binary.LittleEndian.Uint16(first[7:9]))
+			paramCount := int(binary.LittleEndian.Uint16(first[11:13]))
 			if columnCount > 0 {
 				columnData, err := mc.ReadRawPacket()
 				if err != nil {
