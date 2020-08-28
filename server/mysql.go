@@ -125,7 +125,7 @@ func (m *Mysql) Process(conn net.Conn) {
 	for {
 		fmt.Println("process========>",conn.RemoteAddr())
 		clientData, err := pool.ReadPacket(buf)
-		fmt.Println("send:",clientData)
+		fmt.Println("send:",clientData,string(clientData))
 		if err == io.EOF {
 			//fmt.Println("send:EOF err")
 			return
@@ -147,7 +147,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		var fieldLen int
 		//首先需要读取首次数据报，以此判断是否需要读取多次。
 		first, err := mc.ReadRawPacket()
-		fmt.Println("first:",first)
+		fmt.Println("first:",first,string(first))
 		if err != nil {
 			fmt.Println(err)
 			_ = m.ErrResp(2,conn, "receive data from server error")
