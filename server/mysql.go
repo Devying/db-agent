@@ -351,7 +351,7 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	if len(dbName)==0{
 		return []byte("dft"),nil
 	}
-	fmt.Println(dbName)
+	fmt.Println("dbName:",dbName,string(dbName))
 	return dbName,nil
 }
 func (m *Mysql)AuthOK(conn net.Conn)error {
