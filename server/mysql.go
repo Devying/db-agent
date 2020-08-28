@@ -90,7 +90,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		return
 	}
 	insName := string(dbName)
-	fmt.Println("insName:",insName)
+	//fmt.Println("insName:",insName)
 	_,ok := m.Ins[insName]
 	if !ok {
 		_ = m.ErrResp(2,conn, "ins not exists")
@@ -126,7 +126,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		clientData, err := pool.ReadPacket(buf)
 		//fmt.Println("send:",clientData)
 		if err == io.EOF {
-			fmt.Println("send:EOF err")
+			//fmt.Println("send:EOF err")
 			return
 		}
 		if err != nil && err != io.EOF {
@@ -138,6 +138,7 @@ func (m *Mysql) Process(conn net.Conn) {
 		err = mc.WriteRawPacket(clientData)
 		if err != nil {
 			//agent 向server 写数据失败 需要给client 返回错误
+			fmt.Println(err)
 			_ = m.ErrResp(2,conn, "send data to server error")
 			continue
 		}
@@ -145,8 +146,9 @@ func (m *Mysql) Process(conn net.Conn) {
 		var fieldLen int
 		//首先需要读取首次数据报，以此判断是否需要读取多次。
 		first, err := mc.ReadRawPacket()
-		//fmt.Println("first:",first)
+		fmt.Println("first:",first)
 		if err != nil {
+			fmt.Println(err)
 			_ = m.ErrResp(2,conn, "receive data from server error")
 			continue
 		}
@@ -188,6 +190,7 @@ func (m *Mysql) Process(conn net.Conn) {
 				}
 			}
 		}
+		fmt.Println("serverData:",serverData,fieldLen)
 		_,_= conn.Write(serverData)
 		//重置seq
 		pool.seq = 0
@@ -340,9 +343,6 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	if len(db)<2{
 		return nil, errors.New("client error")
 	}
-	for _,v := range db{
-		fmt.Println(v,string(v))
-	}
 	//没有指定db
 	if len(db)<=3{
 		return []byte("dft"),nil
@@ -351,7 +351,7 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	if len(dbName)==0{
 		return []byte("dft"),nil
 	}
-	fmt.Println("dbName:",dbName,string(dbName))
+	//fmt.Println("dbName:",dbName,string(dbName))
 	return dbName,nil
 }
 func (m *Mysql)AuthOK(conn net.Conn)error {
