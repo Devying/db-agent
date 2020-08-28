@@ -90,11 +90,13 @@ func (m *Mysql) Process(conn net.Conn) {
 		return
 	}
 	insName := string(dbName)
+	fmt.Println("insName:",insName)
 	_,ok := m.Ins[insName]
 	if !ok {
 		_ = m.ErrResp(2,conn, "ins not exists")
 		return
 	}
+
 	pool,err := m.GetPool(insName)
 	if err != nil {
 		fmt.Println("get pool error :",err)
@@ -328,9 +330,9 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	auth =append(auth,body...)
 	//4.1后从第36个字节开始解析链接信息
 	//fmt.Println(string(auth))
-	capabilities := auth[4:8]
-
-	fmt.Println(capabilities)
+	//capabilities := auth[4:8]
+	//
+	//fmt.Println(capabilities)
 	dbInfo := auth[36:]
 
 	//分割协议(0x00分割)，第一段为用户名、第二段为认证信息+数据库名（其中第一个字节表示认证信息长度）
@@ -338,12 +340,18 @@ func (m *Mysql) ClientInfo(buf io.Reader) ([]byte,error) {
 	if len(db)<2{
 		return nil, errors.New("client error")
 	}
-
+	for _,v := range db{
+		fmt.Println(v,string(v))
+	}
 	//没有指定db
-	if len(db[1])== 0||len(db)<=3{
+	if len(db)<=3{
 		return []byte("dft"),nil
 	}
 	dbName := db[1][int(db[1][0]+1):]
+	if len(dbName)==0{
+		return []byte("dft"),nil
+	}
+	fmt.Println(dbName)
 	return dbName,nil
 }
 func (m *Mysql)AuthOK(conn net.Conn)error {
