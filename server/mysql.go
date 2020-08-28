@@ -171,7 +171,7 @@ func (m *Mysql) Process(conn net.Conn) {
 						continue
 					}
 					serverData = append(serverData, columnData...)
-					if clientData[4]==0xfe || clientData[4]==0xff{
+					if columnData[4]==0xfe || columnData[4]==0xff{
 						break
 					}
 				}
@@ -185,7 +185,7 @@ func (m *Mysql) Process(conn net.Conn) {
 						continue
 					}
 					serverData = append(serverData, paramData...)
-					if clientData[4]==0xfe || clientData[4]==0xff{
+					if paramData[4]==0xfe || paramData[4]==0xff{
 						break
 					}
 				}
