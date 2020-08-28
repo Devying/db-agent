@@ -191,7 +191,7 @@ func (m *Mysql) Process(conn net.Conn) {
 			}
 		}
 		fmt.Println("serverData:",serverData,fieldLen)
-		_,_= conn.Write(serverData)
+		fmt.Println(conn.Write(serverData))
 		//重置seq
 		pool.seq = 0
 	}
