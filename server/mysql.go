@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/Devying/db-agent/config"
@@ -152,41 +153,70 @@ func (m *Mysql) Process(conn net.Conn) {
 			_ = m.ErrResp(2,conn, "receive data from server error")
 			continue
 		}
-		serverData = append(serverData, first...)
-		switch first[4] {
-		case 0x00,0xfb,0xff://OK,,Err
-			fieldLen = 0
-		default:
+		//STATEMENT PREPARE
+		if clientData[4]== 22 {
+			//https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
+			//根据first包解析是否需要继续读取
+			// Column count [16 bit uint]
+			columnCount := binary.LittleEndian.Uint16(first[5:7])
+			// Param count [16 bit uint]
+			paramCount := int(binary.LittleEndian.Uint16(first[7:9]))
+			if columnCount > 0 {
+				columnData, err := mc.ReadRawPacket()
+				if err != nil {
+					fmt.Println(err)
+					_ = m.ErrResp(2,conn, "receive data from server error")
+					continue
+				}
+				serverData = append(serverData, columnData...)
+			}
+			if paramCount > 0 {
+				paramData, err := mc.ReadRawPacket()
+				if err != nil {
+					fmt.Println(err)
+					_ = m.ErrResp(2,conn, "receive data from server error")
+					continue
+				}
+				serverData = append(serverData, paramData...)
+			}
+		}else {
+
+			serverData = append(serverData, first...)
+			switch first[4] {
+			case 0x00, 0xfb, 0xff: //OK,,Err
+				fieldLen = 0
+			default:
+				//Query
+				firstPayload := first[4:]
+				num, _, n := readLengthEncodedInteger(firstPayload)
+				if n-len(firstPayload) == 0 {
+					fieldLen = int(num)
+				}
+			}
 			//Query
-			firstPayload := first[4:]
-			num, _, n := readLengthEncodedInteger(firstPayload)
-			if n-len(firstPayload) == 0 {
-				fieldLen = int(num)
-			}
-		}
-		//Query
-		if fieldLen > 0 {
-			for i := 0; i <= fieldLen; i++ {
-				fieldData, err := mc.ReadRawPacket()
-				if err != nil {
-					panic(err)
+			if fieldLen > 0 {
+				for i := 0; i <= fieldLen; i++ {
+					fieldData, err := mc.ReadRawPacket()
+					if err != nil {
+						panic(err)
+					}
+					serverData = append(serverData, fieldData...)
 				}
-				serverData = append(serverData, fieldData...)
-			}
-			for {
-				data, err := mc.ReadRawPacket()
-				if err != nil {
-					//fmt.Println(err)
-					break
-				}
-				serverData = append(serverData, data...)
-				//错误标识
-				if data[4] == 0xff {
-					break
-				}
-				//结束标识
-				if data[4] == 0xfe {
-					break
+				for {
+					data, err := mc.ReadRawPacket()
+					if err != nil {
+						//fmt.Println(err)
+						break
+					}
+					serverData = append(serverData, data...)
+					//错误标识
+					if data[4] == 0xff {
+						break
+					}
+					//结束标识
+					if data[4] == 0xfe {
+						break
+					}
 				}
 			}
 		}
