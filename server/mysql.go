@@ -162,6 +162,7 @@ func (m *Mysql) Process(conn net.Conn) {
 			columnCount := binary.LittleEndian.Uint16(first[9:11])
 			// Param count [16 bit uint]
 			paramCount := int(binary.LittleEndian.Uint16(first[11:13]))
+			fmt.Println("columnCount:",columnCount,"paramCount:",paramCount)
 			if columnCount > 0 {
 				for{
 					columnData, err := mc.ReadRawPacket()
