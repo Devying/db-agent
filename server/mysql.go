@@ -163,22 +163,32 @@ func (m *Mysql) Process(conn net.Conn) {
 			// Param count [16 bit uint]
 			paramCount := int(binary.LittleEndian.Uint16(first[11:13]))
 			if columnCount > 0 {
-				columnData, err := mc.ReadRawPacket()
-				if err != nil {
-					fmt.Println(err)
-					_ = m.ErrResp(2,conn, "receive data from server error")
-					continue
+				for{
+					columnData, err := mc.ReadRawPacket()
+					if err != nil {
+						fmt.Println(err)
+						_ = m.ErrResp(2,conn, "receive data from server error")
+						continue
+					}
+					serverData = append(serverData, columnData...)
+					if clientData[4]==0xfe || clientData[4]==0xff{
+						break
+					}
 				}
-				serverData = append(serverData, columnData...)
 			}
 			if paramCount > 0 {
-				paramData, err := mc.ReadRawPacket()
-				if err != nil {
-					fmt.Println(err)
-					_ = m.ErrResp(2,conn, "receive data from server error")
-					continue
+				for {
+					paramData, err := mc.ReadRawPacket()
+					if err != nil {
+						fmt.Println(err)
+						_ = m.ErrResp(2, conn, "receive data from server error")
+						continue
+					}
+					serverData = append(serverData, paramData...)
+					if clientData[4]==0xfe || clientData[4]==0xff{
+						break
+					}
 				}
-				serverData = append(serverData, paramData...)
 			}
 		}else {
 			switch first[4] {
