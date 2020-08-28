@@ -153,6 +153,7 @@ func (m *Mysql) Process(conn net.Conn) {
 			_ = m.ErrResp(2,conn, "receive data from server error")
 			continue
 		}
+		serverData = append(serverData, first...)
 		//STATEMENT PREPARE
 		if clientData[4]== 22 {
 			//https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
@@ -180,8 +181,6 @@ func (m *Mysql) Process(conn net.Conn) {
 				serverData = append(serverData, paramData...)
 			}
 		}else {
-
-			serverData = append(serverData, first...)
 			switch first[4] {
 			case 0x00, 0xfb, 0xff: //OK,,Err
 				fieldLen = 0
