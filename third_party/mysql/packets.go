@@ -146,6 +146,7 @@ func (mc *mysqlConn) writePacket(data []byte) error {
 				return err
 			}
 		}
+		fmt.Println("write data:",data[:4+size],string(data[:4+size]))
 		n, err := mc.netConn.Write(data[:4+size])
 		if err == nil && n == 4+size {
 			mc.sequence++
@@ -601,6 +602,7 @@ func (mc *mysqlConn) writeCommandPacketStr(command byte, arg string) error {
 	copy(data[5:], arg)
 
 	// Send CMD packet
+	println("write prepare command")
 	return mc.writePacket(data)
 }
 
@@ -995,7 +997,9 @@ func (mc *mysqlConn) ReadRawUntilEOF() error {
 // Prepare Result Packets
 // http://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html
 func (stmt *mysqlStmt) readPrepareResultPacket() (uint16, error) {
+	println("read prepare response")
 	data, err := stmt.mc.readPacket()
+	fmt.Println("read prepare response data :",data,string(data))
 	if err == nil {
 		// packet indicator [1 byte]
 		if data[0] != iOK {
@@ -1074,7 +1078,7 @@ func (stmt *mysqlStmt) writeCommandLongData(paramID int, arg []byte) error {
 
 // Execute Prepared Statement
 // http://dev.mysql.com/doc/internals/en/com-stmt-execute.html
-func (stmt *mysqlStmt) writeExecutePacket(args []driver.Value) error {
+func (stmt *mysqlStmt) writeExecutePacket(args []interface{}) error {
 	if len(args) != stmt.paramCount {
 		return fmt.Errorf(
 			"argument count mismatch (got: %d; has: %d)",

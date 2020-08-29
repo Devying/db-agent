@@ -43,7 +43,7 @@ func (stmt *mysqlStmt) ColumnConverter(idx int) driver.ValueConverter {
 	return converter{}
 }
 
-func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
+func (stmt *mysqlStmt) Exec(args []interface{}) (driver.Result, error) {
 	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
@@ -87,11 +87,11 @@ func (stmt *mysqlStmt) Exec(args []driver.Value) (driver.Result, error) {
 	}, nil
 }
 
-func (stmt *mysqlStmt) Query(args []driver.Value) (driver.Rows, error) {
+func (stmt *mysqlStmt) Query(args []interface{}) (*binaryRows, error) {
 	return stmt.query(args)
 }
 
-func (stmt *mysqlStmt) query(args []driver.Value) (*binaryRows, error) {
+func (stmt *mysqlStmt) query(args []interface{}) (*binaryRows, error) {
 	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn

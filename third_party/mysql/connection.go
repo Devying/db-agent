@@ -147,13 +147,12 @@ func (mc *mysqlConn) error() error {
 	return nil
 }
 
-func (mc *mysqlConn) Prepare(query string) (driver.Stmt, error) {
+func (mc *mysqlConn) Prepare(query string) (*mysqlStmt, error) {
 	if mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
 	}
 	// Send command
-	println("prepare------")
 	err := mc.writeCommandPacketStr(comStmtPrepare, query)
 	if err != nil {
 		// STMT_PREPARE is safe to retry.  So we can return ErrBadConn here.
@@ -168,16 +167,18 @@ func (mc *mysqlConn) Prepare(query string) (driver.Stmt, error) {
 	// Read Result
 	columnCount, err := stmt.readPrepareResultPacket()
 	//columnCount
-	println("column :",columnCount)
-	println("stmt.paramCount :",stmt.paramCount)
+	println("columnCount:",columnCount)
+	println("paramCount :",stmt.paramCount)
 	if err == nil {
 		if stmt.paramCount > 0 {
+			println("param read until eof")
 			if err = mc.readUntilEOF(); err != nil {
 				return nil, err
 			}
 		}
 
 		if columnCount > 0 {
+			println("column read until eof")
 			err = mc.readUntilEOF()
 		}
 	}

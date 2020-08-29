@@ -33,11 +33,21 @@ func (m *Mysql) Initialize() error {
 		fmt.Println(v)
 		m.Ins[k] = make(chan *MysqlInstance,v.MaxPoolSize)
 		for i:=0;i<v.InitPoolSize;i++{
+
 			ins,err := m.Connect(v)
 			if err != nil {
 				panic(err)
 			}
 			m.Ins[k] <- ins
+			stmt,err := ins.md.MC.Prepare("select * from task_user_0.users_0 where id < ?")
+			if err != nil {
+				panic(err)
+			}
+			r,err := stmt.Query([]interface{}{12})
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(r.Columns())
 		}
 	}
 	return nil
