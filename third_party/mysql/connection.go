@@ -541,7 +541,7 @@ func (mc *mysqlConn) ExecContext(ctx context.Context, query string, args []drive
 	return mc.Exec(query, dargs)
 }
 
-func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (driver.Stmt, error) {
+func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (*mysqlStmt, error) {
 	if err := mc.watchCancel(ctx); err != nil {
 		return nil, err
 	}
@@ -562,36 +562,38 @@ func (mc *mysqlConn) PrepareContext(ctx context.Context, query string) (driver.S
 }
 
 func (stmt *mysqlStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
-	dargs, err := namedValueToValue(args)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := stmt.mc.watchCancel(ctx); err != nil {
-		return nil, err
-	}
-
-	rows, err := stmt.query(dargs)
-	if err != nil {
-		stmt.mc.finish()
-		return nil, err
-	}
-	rows.finish = stmt.mc.finish
-	return rows, err
+	//dargs, err := namedValueToValue(args)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if err := stmt.mc.watchCancel(ctx); err != nil {
+	//	return nil, err
+	//}
+	//
+	//rows, err := stmt.query(dargs)
+	//if err != nil {
+	//	stmt.mc.finish()
+	//	return nil, err
+	//}
+	//rows.finish = stmt.mc.finish
+	//return rows, err
+	return nil,nil
 }
 
 func (stmt *mysqlStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
-	dargs, err := namedValueToValue(args)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := stmt.mc.watchCancel(ctx); err != nil {
-		return nil, err
-	}
-	defer stmt.mc.finish()
-
-	return stmt.Exec(dargs)
+	//dargs, err := namedValueToValue(args)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//
+	//if err := stmt.mc.watchCancel(ctx); err != nil {
+	//	return nil, err
+	//}
+	//defer stmt.mc.finish()
+	//
+	//return stmt.Exec(dargs)
+	return nil, nil
 }
 
 func (mc *mysqlConn) watchCancel(ctx context.Context) error {
