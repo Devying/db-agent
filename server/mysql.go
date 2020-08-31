@@ -154,17 +154,18 @@ func (m *Mysql) Process(conn net.Conn) {
 			_ = m.ErrResp(2,conn, "send data to server error")
 			continue
 		}
-		var serverData []byte
+		//var serverData []byte
 		var fieldLen int
 		//首先需要读取首次数据报，以此判断是否需要读取多次。
 		first, err := mc.ReadRawPacket()
 		fmt.Println("first:",first,string(first))
+		conn.Write(first)
 		if err != nil {
 			fmt.Println(err)
 			_ = m.ErrResp(2,conn, "receive data from server error")
 			continue
 		}
-		serverData = append(serverData, first...)
+		//serverData = append(serverData, first...)
 		//STMT CLOSE
 		if clientData[4]==25 {
 			return
@@ -189,7 +190,8 @@ func (m *Mysql) Process(conn net.Conn) {
 						_ = m.ErrResp(2,conn, "receive data from server error")
 						continue
 					}
-					serverData = append(serverData, columnData...)
+					conn.Write(columnData)
+					//serverData = append(serverData, columnData...)
 					if columnData[4]==0xfe || columnData[4]==0xff{
 						break
 					}
@@ -203,7 +205,8 @@ func (m *Mysql) Process(conn net.Conn) {
 						_ = m.ErrResp(2, conn, "receive data from server error")
 						continue
 					}
-					serverData = append(serverData, paramData...)
+					conn.Write(paramData)
+					//serverData = append(serverData, paramData...)
 					if paramData[4]==0xfe || paramData[4]==0xff{
 						break
 					}
@@ -228,7 +231,8 @@ func (m *Mysql) Process(conn net.Conn) {
 					if err != nil {
 						panic(err)
 					}
-					serverData = append(serverData, fieldData...)
+					//serverData = append(serverData, fieldData...)
+					conn.Write(fieldData)
 				}
 				for {
 					data, err := mc.ReadRawPacket()
@@ -236,7 +240,8 @@ func (m *Mysql) Process(conn net.Conn) {
 						//fmt.Println(err)
 						break
 					}
-					serverData = append(serverData, data...)
+					conn.Write(data)
+					//serverData = append(serverData, data...)
 					//错误标识
 					if data[4] == 0xff {
 						break
@@ -248,8 +253,8 @@ func (m *Mysql) Process(conn net.Conn) {
 				}
 			}
 		}
-		fmt.Println("serverData:",serverData,fieldLen)
-		fmt.Println(conn.Write(serverData))
+		//fmt.Println("serverData:",serverData,fieldLen)
+		//fmt.Println(conn.Write(serverData))
 		//重置seq
 		pool.seq = 0
 	}
