@@ -603,7 +603,6 @@ func (mc *mysqlConn) writeCommandPacketStr(command byte, arg string) error {
 	copy(data[5:], arg)
 
 	// Send CMD packet
-	println("write prepare command")
 	return mc.writePacket(data)
 }
 
