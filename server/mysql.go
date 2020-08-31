@@ -39,16 +39,16 @@ func (m *Mysql) Initialize() error {
 				panic(err)
 			}
 			m.Ins[k] <- ins
-			stmt,err := ins.md.MC.Prepare("select * from task_user_0.users_0 where id < ?")
-			if err != nil {
-				panic(err)
-			}
-			var id int64 = 12
-			r,err := stmt.Query([]interface{}{id})
-			if err != nil {
-				panic(err)
-			}
-			fmt.Println(r.Columns())
+			//stmt,err := ins.md.MC.Prepare("select * from task_user_0.users_0 where id < ?")
+			//if err != nil {
+			//	panic(err)
+			//}
+			//var id int64 = 12
+			//r,err := stmt.Query([]interface{}{id})
+			//if err != nil {
+			//	panic(err)
+			//}
+			//fmt.Println(r.Columns())
 		}
 	}
 	return nil
@@ -166,6 +166,9 @@ func (m *Mysql) Process(conn net.Conn) {
 		}
 		serverData = append(serverData, first...)
 		//STATEMENT PREPARE
+		if clientData[4]==23 {
+			fmt.Println("stmt query",clientData,string(clientData))
+		}
 		if clientData[4]== 22 {
 			//https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
 			//根据first包解析是否需要继续读取
