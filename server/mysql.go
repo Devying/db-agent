@@ -165,6 +165,10 @@ func (m *Mysql) Process(conn net.Conn) {
 			continue
 		}
 		serverData = append(serverData, first...)
+		//STMT CLOSE
+		if clientData[4]==25 {
+			return
+		}
 		//STATEMENT PREPARE
 		if clientData[4]==23 {
 			fmt.Println("stmt query",clientData,string(clientData))
