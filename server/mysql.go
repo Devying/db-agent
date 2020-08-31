@@ -193,6 +193,7 @@ func (m *Mysql) Process(conn net.Conn) {
 					}
 				}
 				fmt.Println(conn.Write(serverData))
+				pool.seq = 0
 			}
 			if paramCount > 0 {
 				serverData = nil
@@ -209,6 +210,7 @@ func (m *Mysql) Process(conn net.Conn) {
 					}
 				}
 				fmt.Println(conn.Write(serverData))
+				pool.seq = 0
 			}
 			continue
 		}else {
