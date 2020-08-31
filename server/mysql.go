@@ -171,6 +171,8 @@ func (m *Mysql) Process(conn net.Conn) {
 		}
 		if clientData[4]== 22 {
 			fmt.Println(conn.Write(serverData))
+			clientData, _ := pool.ReadPacket(buf)
+			fmt.Println("send:",clientData,string(clientData))
 			//https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
 			//根据first包解析是否需要继续读取
 			// Column count [16 bit uint]
@@ -194,6 +196,8 @@ func (m *Mysql) Process(conn net.Conn) {
 				}
 				fmt.Println(conn.Write(serverData))
 				pool.seq = 0
+				clientData, _ := pool.ReadPacket(buf)
+				fmt.Println("send:",clientData,string(clientData))
 			}
 			if paramCount > 0 {
 				serverData = nil
@@ -211,6 +215,8 @@ func (m *Mysql) Process(conn net.Conn) {
 				}
 				fmt.Println(conn.Write(serverData))
 				pool.seq = 0
+				clientData, _ := pool.ReadPacket(buf)
+				fmt.Println("send:",clientData,string(clientData))
 			}
 			continue
 		}else {
