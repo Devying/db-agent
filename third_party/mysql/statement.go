@@ -92,11 +92,13 @@ func (stmt *mysqlStmt) Query(args []interface{}) (*binaryRows, error) {
 }
 
 func (stmt *mysqlStmt) query(args []interface{}) (*binaryRows, error) {
+	println("mysqlstmt query ......")
 	if stmt.mc.closed.IsSet() {
 		errLog.Print(ErrInvalidConn)
 		return nil, driver.ErrBadConn
 	}
 	// Send command
+	println("write query command")
 	err := stmt.writeExecutePacket(args)
 	if err != nil {
 		return nil, stmt.mc.markBadConn(err)
@@ -105,6 +107,7 @@ func (stmt *mysqlStmt) query(args []interface{}) (*binaryRows, error) {
 	mc := stmt.mc
 
 	// Read Result
+	println("read query result")
 	resLen, err := mc.readResultSetHeaderPacket()
 	if err != nil {
 		return nil, err

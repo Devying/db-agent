@@ -78,6 +78,7 @@ func (mc *mysqlConn) readPacket() ([]byte, error) {
 		// return data if this was the last packet
 		if pktLen < maxPacketSize {
 			// zero allocations for non-split packets
+			fmt.Println(" readed data :",data,string(data))
 			if prevData == nil {
 				return data, nil
 			}

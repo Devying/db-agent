@@ -43,7 +43,8 @@ func (m *Mysql) Initialize() error {
 			if err != nil {
 				panic(err)
 			}
-			r,err := stmt.Query([]interface{}{12})
+			var id int64 = 12
+			r,err := stmt.Query([]interface{}{id})
 			if err != nil {
 				panic(err)
 			}
