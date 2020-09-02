@@ -121,10 +121,10 @@ func (ins *Instance) ReadPacket(buf io.Reader) ([]byte, error) {
 		if err != nil || n != pktLen {
 			return nil, err
 		}
-		if pktLen == 1 && body[0] == 1 {
-			//客户端发送了Quit协议，我们需要拦截，因为我们是要复用链接
-			return nil, errors.New("CLIENT SEND QUIT")
-		}
+		//if pktLen == 1 && body[0] == 1 {
+		//	//客户端发送了Quit协议，我们需要拦截，因为我们是要复用链接
+		//	return nil, errors.New("CLIENT SEND QUIT")
+		//}
 		if pktLen < maxPacketSize {
 			return append(prevData, body...), nil
 		}
@@ -237,7 +237,7 @@ func (ins *Instance) Handle(conn net.Conn)  {
 		//serverData = append(serverData, first...)
 		//STMT CLOSE
 		switch command {
-		case comStmtClose:
+		case comQuit,comStmtClose:
 				return
 		case comStmtPrepare:
 			//https://dev.mysql.com/doc/internals/en/com-stmt-prepare-response.html#packet-COM_STMT_PREPARE_OK
